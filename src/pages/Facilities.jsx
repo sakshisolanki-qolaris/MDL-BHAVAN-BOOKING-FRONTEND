@@ -1,4 +1,5 @@
 import { useState } from "react";
+import PropTypes from "prop-types";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import api from "../api/axios";
@@ -39,7 +40,6 @@ const getPlaceholderImage = (type, index) => {
   return typeImages[index % typeImages.length];
 };
 
-// FacilityCard component remains unchanged
 const FacilityCard = ({ facility, index, navigate, isAuthenticated }) => {
   const [imgIdx, setImgIdx] = useState(0);
   const isAvailable = facility.isAvailableForDates !== false;
@@ -63,21 +63,34 @@ const FacilityCard = ({ facility, index, navigate, isAuthenticated }) => {
 
   const handleCardClick = () => {
     if (!isAvailable) {
-      return toast.error("This package is sold out for the selected dates.");
+      toast.error("This package is sold out for the selected dates.");
+      return;
     }
     if (!isAuthenticated) {
       toast.info("Please log in or create an account to book this facility.");
-      return navigate("/user/login");
+      navigate("/user/login");
+      return;
     }
     navigate(`/book/${facility.id}`);
   };
 
+  const getPriceSuffix = (pricingType) => {
+    if (pricingType === "HOURLY") return "per hour";
+    if (pricingType === "TIERED") return "per day";
+    return "per slot";
+  };
+
   return (
-    <div
-      className={`flex flex-col md:flex-row bg-white rounded-xl border shadow-sm transition overflow-hidden ${!isAvailable ? "opacity-60 cursor-not-allowed grayscale-[0.5]" : "hover:shadow-md cursor-pointer"}`}
+    <button
+      type="button"
       onClick={handleCardClick}
+      className={`w-full text-left flex flex-col md:flex-row bg-white rounded-xl border shadow-sm transition overflow-hidden focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+        isAvailable
+          ? "hover:shadow-md cursor-pointer"
+          : "opacity-60 cursor-not-allowed grayscale-[0.5]"
+      }`}
     >
-      <div className="md:w-1/3 relative h-48 md:h-auto group">
+      <div className="md:w-1/3 relative h-48 md:h-auto group shrink-0">
         <img
           src={images[imgIdx] || images[0]}
           alt={facility.name}
@@ -106,11 +119,15 @@ const FacilityCard = ({ facility, index, navigate, isAuthenticated }) => {
             >
               <ChevronRight size={16} />
             </button>
+
             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-              {images.map((_, i) => (
+              {images.map((img, i) => (
                 <div
-                  key={i}
-                  className={`w-1.5 h-1.5 rounded-full ${i === imgIdx ? "bg-white" : "bg-white/50"}`}
+                  // FIX: Use image URL as key to prevent array index warnings
+                  key={typeof img === "string" ? img : `img-dot-${i}`}
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    i === imgIdx ? "bg-white" : "bg-white/50"
+                  }`}
                 />
               ))}
             </div>
@@ -130,7 +147,7 @@ const FacilityCard = ({ facility, index, navigate, isAuthenticated }) => {
         )}
       </div>
 
-      <div className="md:w-2/3 p-4 flex flex-col justify-between">
+      <div className="md:w-2/3 p-4 flex flex-col justify-between flex-1">
         <div>
           <div className="flex justify-between items-start">
             <h2 className="text-xl font-bold text-gray-900">{facility.name}</h2>
@@ -143,7 +160,7 @@ const FacilityCard = ({ facility, index, navigate, isAuthenticated }) => {
             <div className="flex flex-wrap gap-2 mt-4">
               {facility.pricingDetails.included_facilities
                 .slice(0, 3)
-                .map((inc, i) => {
+                .map((inc) => {
                   const itemName = typeof inc === "object" ? inc.name : inc;
                   const itemQty =
                     typeof inc === "object" && inc.quantity > 1
@@ -152,7 +169,7 @@ const FacilityCard = ({ facility, index, navigate, isAuthenticated }) => {
 
                   return (
                     <span
-                      key={i}
+                      key={itemName}
                       className="flex items-center gap-1 text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded"
                     >
                       <Check size={12} className="text-green-600" /> {itemName}
@@ -169,7 +186,7 @@ const FacilityCard = ({ facility, index, navigate, isAuthenticated }) => {
           )}
         </div>
 
-        <div className="mt-4 flex justify-between items-end border-t pt-4">
+        <div className="mt-4 flex justify-between items-end border-t border-gray-100 pt-4">
           <div>
             {!isAvailable && (
               <span className="flex items-center gap-1 text-red-600 text-xs font-bold bg-red-50 px-2 py-1 rounded border border-red-100">
@@ -177,47 +194,69 @@ const FacilityCard = ({ facility, index, navigate, isAuthenticated }) => {
               </span>
             )}
           </div>
+
           <div className="text-right">
             <p className="text-xs text-gray-500 mb-1">
-              Price{" "}
-              {facility.pricingType === "HOURLY"
-                ? "per hour"
-                : facility.pricingType === "TIERED"
-                  ? "per day"
-                  : "per slot"}
+              Price {getPriceSuffix(facility.pricingType)}
             </p>
             <p
-              className={`text-2xl font-extrabold ${!isAvailable ? "text-gray-400 line-through" : "text-gray-900"}`}
+              className={`text-2xl font-extrabold ${
+                isAvailable ? "text-gray-900" : "text-gray-400 line-through"
+              }`}
             >
-              ₹{parseInt(facility.baseRate).toLocaleString("en-IN")}
+              ₹{Number.parseInt(facility.baseRate, 10).toLocaleString("en-IN")}
             </p>
           </div>
         </div>
       </div>
-    </div>
+    </button>
   );
+};
+
+FacilityCard.propTypes = {
+  facility: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+    name: PropTypes.string.isRequired,
+    description: PropTypes.string,
+    facilityType: PropTypes.string.isRequired,
+    isAvailableForDates: PropTypes.bool,
+    images: PropTypes.arrayOf(PropTypes.string),
+    baseRate: PropTypes.oneOfType([PropTypes.string, PropTypes.number])
+      .isRequired,
+    pricingType: PropTypes.string,
+    pricingDetails: PropTypes.shape({
+      included_facilities: PropTypes.arrayOf(
+        PropTypes.oneOfType([
+          PropTypes.string,
+          PropTypes.shape({
+            name: PropTypes.string.isRequired,
+            quantity: PropTypes.number,
+          }),
+        ]),
+      ),
+    }),
+  }).isRequired,
+  index: PropTypes.number.isRequired,
+  navigate: PropTypes.func.isRequired,
+  isAuthenticated: PropTypes.bool.isRequired,
 };
 
 export default function Facilities() {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuthStore();
 
-  // State for what the user is currently typing/selecting
   const [searchDates, setSearchDates] = useState({
     startDate: "",
     endDate: "",
   });
 
-  // State for the applied search that actually triggers the API call
   const [appliedDates, setAppliedDates] = useState({
     startDate: "",
     endDate: "",
   });
 
-  // REACT QUERY FETCH FUNCTION
   const fetchFacilitiesFn = async ({ queryKey }) => {
-    // queryKey looks like: ['facilities', { start: '2026-05-01', end: '2026-05-05' }]
-    const [_key, { start, end }] = queryKey;
+    const [, { start, end }] = queryKey;
 
     let url = "/facilities";
     if (start && end) {
@@ -225,14 +264,11 @@ export default function Facilities() {
     }
 
     const response = await api.get(url);
-    // Return only the filtered data directly to React Query
     return response.data.data.filter(
       (f) => f.facilityType === "PACKAGE" || f.facilityType === "COMPLEX",
     );
   };
 
-  // REACT QUERY HOOK
-  // This automatically handles loading, errors, caching, and background refetching
   const {
     data: facilities = [],
     isLoading,
@@ -250,9 +286,9 @@ export default function Facilities() {
       (searchDates.startDate && !searchDates.endDate) ||
       (!searchDates.startDate && searchDates.endDate)
     ) {
-      return toast.warn("Please select both Start and End dates.");
+      toast.warn("Please select both Start and End dates.");
+      return;
     }
-    // Updating appliedDates automatically triggers useQuery to fetch if the data isn't cached
     setAppliedDates(searchDates);
   };
 
@@ -277,15 +313,43 @@ export default function Facilities() {
       toast.info(
         "Please log in or create an account to make a custom booking.",
       );
-      return navigate("/user/login");
+      navigate("/user/login");
+      return;
     }
     navigate("/book/custom");
   };
 
-  // Handle API errors natively
   if (isError) {
     toast.error("Failed to load facilities");
   }
+
+  const renderFacilitiesContent = () => {
+    if (isLoading) {
+      return (
+        <div className="text-center p-10 text-gray-500">
+          Loading facilities...
+        </div>
+      );
+    }
+
+    if (facilities.length === 0) {
+      return (
+        <div className="text-center p-10 text-gray-500 font-medium text-lg border rounded-xl bg-white shadow-sm">
+          No packages match your search criteria.
+        </div>
+      );
+    }
+
+    return facilities.map((facility, index) => (
+      <FacilityCard
+        key={facility.id}
+        facility={facility}
+        index={index}
+        navigate={navigate}
+        isAuthenticated={isAuthenticated}
+      />
+    ));
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -293,14 +357,16 @@ export default function Facilities() {
       <nav className="bg-white border-b shadow-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div
-              className="flex items-center cursor-pointer"
+            <button
+              type="button"
+              className="flex items-center cursor-pointer outline-none hover:opacity-80 transition bg-transparent border-none p-0"
               onClick={() => navigate("/facilities")}
             >
               <span className="text-blue-600 font-extrabold text-2xl tracking-tighter">
                 Bhavan<span className="text-orange-500">Book</span>
               </span>
-            </div>
+            </button>
+
             <div className="flex items-center gap-4 relative group">
               {isAuthenticated ? (
                 <div className="flex items-center gap-2 cursor-pointer p-2 rounded-md hover:bg-gray-50">
@@ -309,23 +375,28 @@ export default function Facilities() {
                     {user?.fullName}
                   </span>
                   <ChevronDown size={16} />
+
                   <div className="absolute right-0 top-12 w-48 bg-white border rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
-                    <div
-                      className="px-4 py-3 hover:bg-gray-50 text-sm cursor-pointer"
+                    <button
+                      type="button"
+                      className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm cursor-pointer outline-none bg-transparent border-none block"
                       onClick={() => navigate("/my-bookings")}
                     >
                       My Bookings
-                    </div>
-                    <div
-                      className="px-4 py-3 hover:bg-gray-50 text-sm text-red-600 cursor-pointer"
+                    </button>
+
+                    <button
+                      type="button"
+                      className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm text-red-600 cursor-pointer outline-none bg-transparent border-none block"
                       onClick={handleLogout}
                     >
                       Logout
-                    </div>
+                    </button>
                   </div>
                 </div>
               ) : (
                 <button
+                  type="button"
                   onClick={() => navigate("/user/login")}
                   className="text-sm font-bold text-white bg-blue-600 px-5 py-2 rounded-full hover:bg-blue-700 transition"
                 >
@@ -399,13 +470,16 @@ export default function Facilities() {
 
             <div className="flex flex-col md:flex-row gap-2">
               <button
+                type="button"
                 onClick={handleSearch}
                 className="bg-orange-500 hover:bg-orange-600 text-white font-bold text-lg px-8 py-3 rounded-lg md:rounded-r-lg transition"
               >
                 SEARCH
               </button>
+
               {(searchDates.startDate || searchDates.endDate) && (
                 <button
+                  type="button"
                   onClick={handleClearSearch}
                   className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold text-sm px-4 py-3 rounded-lg transition"
                 >
@@ -419,11 +493,12 @@ export default function Facilities() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col lg:flex-row gap-6">
         <div className="w-full lg:w-3/4 space-y-6 mx-auto">
-          <div
-            className="flex flex-col md:flex-row bg-gradient-to-r from-blue-50 to-indigo-100 rounded-xl border border-blue-200 shadow-md hover:shadow-lg transition-all overflow-hidden cursor-pointer transform hover:-translate-y-1"
+          <button
+            type="button"
             onClick={handleCustomBookingClick}
+            className="w-full text-left flex flex-col md:flex-row bg-gradient-to-r from-blue-50 to-indigo-100 rounded-xl border border-blue-200 shadow-md hover:shadow-lg transition-all overflow-hidden cursor-pointer transform hover:-translate-y-1 outline-none focus:ring-2 focus:ring-blue-500"
           >
-            <div className="md:w-1/3 bg-blue-600 flex flex-col items-center justify-center text-white p-6">
+            <div className="md:w-1/3 bg-blue-600 flex flex-col items-center justify-center text-white p-6 shrink-0">
               <Layers size={48} className="mb-2 opacity-80" />
               <span className="text-xl font-extrabold text-center">
                 Custom Booking
@@ -438,12 +513,12 @@ export default function Facilities() {
                 Lawns, Rooms, and specific catering items here.
               </p>
               <div className="mt-4">
-                <button className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-6 py-2 rounded-full transition shadow-sm">
+                <span className="inline-block bg-blue-600 text-white font-bold text-sm px-6 py-2 rounded-full transition shadow-sm">
                   Start Customizing
-                </button>
+                </span>
               </div>
             </div>
-          </div>
+          </button>
 
           <h2 className="text-xl font-bold text-gray-800 pt-4 border-t flex justify-between items-center">
             Standard Packages
@@ -454,25 +529,7 @@ export default function Facilities() {
             )}
           </h2>
 
-          {isLoading ? (
-            <div className="text-center p-10 text-gray-500">
-              Loading facilities...
-            </div>
-          ) : facilities.length === 0 ? (
-            <div className="text-center p-10 text-gray-500 font-medium text-lg border rounded-xl bg-white shadow-sm">
-              No packages match your search criteria.
-            </div>
-          ) : (
-            facilities.map((facility, index) => (
-              <FacilityCard
-                key={facility.id}
-                facility={facility}
-                index={index}
-                navigate={navigate}
-                isAuthenticated={isAuthenticated}
-              />
-            ))
-          )}
+          {renderFacilitiesContent()}
         </div>
       </main>
     </div>

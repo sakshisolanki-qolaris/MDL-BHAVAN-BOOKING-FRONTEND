@@ -1,42 +1,52 @@
-import { useState, useEffect } from 'react';
-import { CheckCircle, Shield, LogOut, X, Eye, FileText, AlertTriangle, Settings, Plus, CreditCard } from 'lucide-react';
-import api from '../../api/axios';
-import { toast } from 'react-toastify';
-import useAuthStore from '../../store/useAuthStore';
-import { useNavigate } from 'react-router-dom';
-import CreateClerk from './CreateClerk';
-import InvoicePrintView from '../../components/InvoicePrintView';
-import AdminProfileModal from './AdminProfileModal'; 
-import ReportsView from './ReportsView';
-import AdminFacilitiesView from './AdminFacilitiesView';
-import socket from '../../api/socket';
-import BookingDetailsModal from '../../components/booking/BookingDetailsModal';
+import { useState, useEffect } from "react";
+import {
+  Shield,
+  LogOut,
+  Eye,
+  FileText,
+  Settings,
+  CreditCard,
+  Ban,
+} from "lucide-react";
+import api from "../../api/axios";
+import { toast } from "react-toastify";
+import useAuthStore from "../../store/useAuthStore";
+import { useNavigate } from "react-router-dom";
+
+import CreateClerk from "./CreateClerk";
+import InvoicePrintView from "../../components/InvoicePrintView";
+import AdminProfileModal from "./AdminProfileModal";
+import ReportsView from "./ReportsView";
+import AdminFacilitiesView from "./AdminFacilitiesView";
+import socket from "../../api/socket";
+import BookingDetailsModal from "../../components/booking/BookingDetailsModal";
+
+// --- IMPORTED COMPONENTS ---
+import AdminApprovalModal from "./components/AdminApprovalModal";
+import AdminInvoiceModal from "./components/AdminInvoiceModal";
 
 const formatDate = (dateString) => {
-  if (!dateString) return 'N/A';
-  const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-  return new Date(dateString).toLocaleDateString('en-IN', options);
+  if (!dateString) return "N/A";
+  return new Date(dateString).toLocaleDateString("en-IN", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 };
 
 export default function AdminDashboard() {
-  const [printModal, setPrintModal] = useState(null); 
-  const [activeTab, setActiveTab] = useState('PENDING_ADMIN_APPROVAL');
+  const [activeTab, setActiveTab] = useState("PENDING_ADMIN_APPROVAL");
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  
-  // --- APPROVAL MODAL STATES ---
-  const [approvingBooking, setApprovingBooking] = useState(null);
-  const [totalAmount, setTotalAmount] = useState(''); 
-  const [overrideSecurityDeposit, setOverrideSecurityDeposit] = useState('');
-  const [isHoldingAllowed, setIsHoldingAllowed] = useState(false);
-  const [holdingPercentage, setHoldingPercentage] = useState(20);
-  const [holdingValidityDays, setHoldingValidityDays] = useState(7);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
-  // --- INVOICE / DETAILS STATES ---
+
+  // Modal States
+  const [approvingBooking, setApprovingBooking] = useState(null);
   const [invoiceModal, setInvoiceModal] = useState(null);
-  const [invoiceRemarks, setInvoiceRemarks] = useState('');
   const [viewingDetails, setViewingDetails] = useState(null);
+  const [printModal, setPrintModal] = useState(null);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
   const { user, logout } = useAuthStore();
@@ -46,25 +56,26 @@ export default function AdminDashboard() {
     fetchBookings();
     const autoRefresh = () => fetchBookings();
 
-    socket.on('new_booking_request', autoRefresh);
-    socket.on('new_walkin_booking', autoRefresh);
-    socket.on('booking_status_updated', autoRefresh);
-    socket.on('new_invoice_draft', autoRefresh);
+    socket.on("new_booking_request", autoRefresh);
+    socket.on("new_walkin_booking", autoRefresh);
+    socket.on("booking_status_updated", autoRefresh);
+    socket.on("new_invoice_draft", autoRefresh);
 
     return () => {
-      socket.off('new_booking_request', autoRefresh);
-      socket.off('new_walkin_booking', autoRefresh);
-      socket.off('booking_status_updated', autoRefresh);
-      socket.off('new_invoice_draft', autoRefresh);
+      socket.off("new_booking_request", autoRefresh);
+      socket.off("new_walkin_booking", autoRefresh);
+      socket.off("booking_status_updated", autoRefresh);
+      socket.off("new_invoice_draft", autoRefresh);
     };
   }, []);
 
   const fetchBookings = async () => {
     try {
-      const response = await api.get('/auth/admin/bookings');
+      const response = await api.get("/auth/admin/bookings");
       setBookings(response.data.data);
     } catch (error) {
-      toast.error('Failed to load bookings.');
+      console.error("Failed to fetch bookings:", error);
+      toast.error("Failed to load bookings.");
     } finally {
       setLoading(false);
     }
@@ -72,75 +83,64 @@ export default function AdminDashboard() {
 
   const handleProcessRefund = async (booking) => {
     const amount = booking.financials?.refundAmount || 0;
-    const isOnline = booking.financials?.razorpayPaymentIds?.length > 0;
-    const mode = isOnline ? 'Online (Automatic Razorpay Refund)' : 'Manual (Cash handed at desk)';
 
-    if (!window.confirm(`Are you sure you want to approve this cancellation and process a refund of ₹${amount} via ${mode}?`)) return;
-    
+    // If amount is 0, we are just approving the cancellation without a refund
+    if (amount <= 0) {
+      if (
+        !globalThis.confirm(
+          `Approve cancellation? (No refund will be issued as amount is ₹0)`,
+        )
+      )
+        return;
+    } else {
+      const isOnline = booking.financials?.razorpayPaymentIds?.length > 0;
+      const mode = isOnline ? "Online" : "Manual";
+      if (!globalThis.confirm(`Process a refund of ₹${amount} via ${mode}?`))
+        return;
+    }
+
     try {
       await api.patch(`/bookings/${booking.id}/process-refund`);
-      toast.success('Cancellation approved!');
+      toast.success(
+        amount > 0
+          ? "Refund processed and cancellation approved!"
+          : "Cancellation approved successfully!",
+      );
       fetchBookings();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to process refund');
+      console.error(error);
+      toast.error(
+        error.response?.data?.message ||
+          "Failed to process cancellation/refund",
+      );
     }
   };
 
- const handleOpenApproveModal = (booking) => {
-    setApprovingBooking(booking);
-    const financials = booking.financials || {};
-    const baseCalculated = Number(financials.calculatedAmount) || 0;
-    const security = Number(financials.securityDeposit) || 0;
-    
-    setTotalAmount(baseCalculated.toString());
-    setOverrideSecurityDeposit(security.toString());
-    
-    setIsHoldingAllowed(financials.isHoldingAllowed || false);
-    setHoldingPercentage(financials.holdingPercentage || 20);
-    setHoldingValidityDays(financials.holdingValidityDays || 7);
-  };
-
-  const handleConfirmApproval = async (e) => {
-    e.preventDefault();
-    if (Number(totalAmount) < 0) return toast.warn('Total amount cannot be negative.');
-    if (Number(overrideSecurityDeposit) < 0) return toast.warn('Security deposit cannot be negative.');
-    
-    if (isHoldingAllowed) {
-      if (Number(holdingPercentage) <= 0 || Number(holdingPercentage) > 100) return toast.warn('Holding percentage must be between 1 and 100.');
-      if (Number(holdingValidityDays) <= 0) return toast.warn('Holding validity days must be greater than 0.');
-    }
-
+  const handleConfirmApproval = async (bookingId, payload) => {
     setIsSubmitting(true);
     try {
-      const payload = {
-        revisedTotalAmount: Number(totalAmount),
-        overrideSecurityDeposit: Number(overrideSecurityDeposit),
-        isHoldingAllowed,
-        ...(isHoldingAllowed && {
-          holdingPercentage: Number(holdingPercentage),
-          holdingValidityDays: Number(holdingValidityDays),
-        })
-      };
-
-      await api.patch(`/auth/admin/bookings/${approvingBooking.id}/approve`, payload);
-      toast.success('Booking approved! User notified to pay.');
+      await api.patch(`/auth/admin/bookings/${bookingId}/approve`, payload);
+      toast.success("Booking approved! User notified to pay.");
       setApprovingBooking(null);
-      fetchBookings(); 
+      fetchBookings();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to approve booking');
+      console.error(error);
+      toast.error(error.response?.data?.message || "Failed to approve booking");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleRejectBooking = async (bookingId) => {
-    if (!window.confirm('Are you sure you want to reject this booking? This cannot be undone.')) return;
+    if (!globalThis.confirm("Reject this booking? This cannot be undone."))
+      return;
     try {
       await api.patch(`/bookings/${bookingId}/reject`);
-      toast.success('Booking rejected successfully.');
+      toast.success("Booking rejected successfully.");
       fetchBookings();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to reject booking');
+      console.error(error);
+      toast.error(error.response?.data?.message || "Failed to reject booking");
     }
   };
 
@@ -148,33 +148,30 @@ export default function AdminDashboard() {
     try {
       const response = await api.get(`/billing/${booking.id}/invoice`);
       const invoice = response.data.data.invoice;
-      
-      if (invoice.approvalStatus !== 'PENDING_ADMIN_APPROVAL') {
-        return toast.info(`This invoice is currently: ${invoice.approvalStatus}`);
-      }
-
+      if (invoice.approvalStatus !== "PENDING_ADMIN_APPROVAL")
+        return toast.info(
+          `This invoice is currently: ${invoice.approvalStatus}`,
+        );
       setInvoiceModal({ booking, invoice });
-      setInvoiceRemarks('');
     } catch (error) {
-      toast.info("No pending draft invoice found. Clerk has not initiated check-out yet.");
+      console.error(error);
+      toast.info("No pending draft invoice found.");
     }
   };
 
-  const handleInvoiceAction = async (status) => {
-    if (status === 'REJECTED' && !invoiceRemarks.trim()) {
-      return toast.warn('Remarks are required when rejecting an invoice back to the clerk.');
-    }
-
+  const handleInvoiceAction = async (invoiceId, payload) => {
     setIsSubmitting(true);
     try {
-      const payload = { approvalStatus: status, adminRemarks: invoiceRemarks };
-      const response = await api.patch(`/billing/invoice/${invoiceModal.invoice.id}/approve`, payload);
-      
-      toast.success(response.data.message || `Invoice ${status.toLowerCase()} successfully.`);
+      const response = await api.patch(
+        `/billing/invoice/${invoiceId}/approve`,
+        payload,
+      );
+      toast.success(response.data.message || `Invoice processed successfully.`);
       setInvoiceModal(null);
       fetchBookings();
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to process invoice');
+      console.error(error);
+      toast.error(error.response?.data?.message || "Failed to process invoice");
     } finally {
       setIsSubmitting(false);
     }
@@ -182,40 +179,177 @@ export default function AdminDashboard() {
 
   const handleLogout = async () => {
     try {
-      await api.post('/auth/user/logout'); 
-    } catch (error) {
-      console.error("Failed to clear cookie on backend", error);
-    } finally {
-      logout();
-      navigate('/admin/login');
+      await api.post("/auth/user/logout");
+    } catch (err) {
+      console.error(err);
     }
+    logout();
+    navigate("/admin/login");
   };
 
   const filteredBookings = bookings.filter((b) => {
-    if (activeTab === 'ALL') return true;
-    if (activeTab === 'CHECKED_IN') return b.status === 'CHECKED_IN' || b.status === 'CHECKED_OUT';
-    if (activeTab === 'PENDING_REFUNDS') {
-      return b.status === 'PENDING_CANCELLATION' || 
-             (b.status === 'CANCELLED' && b.financials?.refundAmount > 0 && b.financials?.paymentStatus !== 'REFUNDED');
-    }
+    if (activeTab === "ALL") return true;
+    if (activeTab === "CHECKED_IN")
+      return b.status === "CHECKED_IN" || b.status === "CHECKED_OUT";
+    if (activeTab === "PENDING_REFUNDS")
+      return (
+        b.status === "PENDING_CANCELLATION" ||
+        (b.status === "CANCELLED" &&
+          b.financials?.refundAmount > 0 &&
+          b.financials?.paymentStatus !== "REFUNDED")
+      );
     return b.status === activeTab;
   });
 
-  if (loading) return <div className="p-20 text-center text-xl text-gray-500">Loading Admin workspace...</div>;
+  const renderMainContent = () => {
+    if (activeTab === "STAFF") return <CreateClerk />;
+    if (activeTab === "REPORTS") return <ReportsView />;
+    if (activeTab === "FACILITIES") return <AdminFacilitiesView />;
+
+    return (
+      <div className="bg-white shadow-sm rounded-lg border overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-gray-50 text-gray-500 text-sm uppercase tracking-wider border-b">
+                <th className="p-4 font-medium">Ref ID</th>
+                <th className="p-4 font-medium">Dates</th>
+                <th className="p-4 font-medium">Status</th>
+                <th className="p-4 font-medium">Action</th>
+              </tr>
+            </thead>
+            <tbody className="text-sm divide-y divide-gray-100">
+              {filteredBookings.length === 0 && (
+                <tr>
+                  <td colSpan="4" className="p-8 text-center text-gray-500">
+                    No bookings found in this category.
+                  </td>
+                </tr>
+              )}
+              {filteredBookings.map((booking) => {
+                const schedule = booking.schedule || {};
+                // Calculate refund amount
+                const refundAmt = booking.financials?.refundAmount || 0;
+
+                return (
+                  <tr key={booking.id} className="hover:bg-gray-50 transition">
+                    <td className="p-4 text-gray-900 font-mono text-xs font-bold">
+                      {booking.id.substring(0, 8).toUpperCase()}
+                    </td>
+                    <td className="p-4 whitespace-nowrap">
+                      <span className="text-green-700 font-medium block">
+                        In: {formatDate(schedule.startTime)}
+                      </span>
+                      <span className="text-red-700 font-medium block mt-1">
+                        Out: {formatDate(schedule.endTime)}
+                      </span>
+                    </td>
+                    <td className="p-4">
+                      <span className="px-2 py-1 text-xs font-bold rounded-full bg-gray-100 text-gray-800">
+                        {booking.status.replaceAll("_", " ")}
+                      </span>
+                    </td>
+                    <td className="p-4 flex flex-wrap gap-2 items-center">
+                      {/* Booking Approval Actions */}
+                      {booking.status === "PENDING_ADMIN_APPROVAL" && (
+                        <>
+                          <button
+                            onClick={() => setApprovingBooking(booking)}
+                            className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs transition"
+                          >
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => handleRejectBooking(booking.id)}
+                            className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs transition"
+                          >
+                            Reject
+                          </button>
+                        </>
+                      )}
+
+                      {/* Check-Out / Invoice Action */}
+                      {booking.status === "CHECKED_IN" && (
+                        <button
+                          onClick={() => handleOpenInvoiceModal(booking)}
+                          className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded text-xs transition flex items-center gap-1"
+                        >
+                          <FileText size={14} /> Review Check-Out
+                        </button>
+                      )}
+
+                      {/* Refund / Cancellation Actions */}
+                      {(booking.status === "PENDING_CANCELLATION" ||
+                        (booking.status === "CANCELLED" &&
+                          refundAmt > 0 &&
+                          booking.financials?.paymentStatus !== "REFUNDED")) &&
+                        (refundAmt > 0 ? (
+                          <button
+                            onClick={() => handleProcessRefund(booking)}
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs transition flex items-center gap-1"
+                          >
+                            <CreditCard size={14} /> Process Refund (₹
+                            {refundAmt})
+                          </button>
+                        ) : (
+                          // For cases where status is PENDING_CANCELLATION but amount is 0
+                          booking.status === "PENDING_CANCELLATION" && (
+                            <button
+                              onClick={() => handleProcessRefund(booking)}
+                              className="bg-gray-600 hover:bg-gray-700 text-white px-3 py-1.5 rounded text-xs transition flex items-center gap-1"
+                            >
+                              <Ban size={14} /> Approve Cancellation (₹0 Refund)
+                            </button>
+                          )
+                        ))}
+
+                      {/* View Details Action */}
+                      <button
+                        onClick={() => setViewingDetails(booking)}
+                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1.5 rounded text-xs transition flex items-center gap-1 h-fit"
+                      >
+                        <Eye size={14} /> Details
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  if (loading)
+    return (
+      <div className="p-20 text-center text-xl text-gray-500">
+        Loading Admin workspace...
+      </div>
+    );
 
   return (
     <div className="min-h-screen bg-gray-100">
       <nav className="bg-red-800 text-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
           <div className="flex items-center gap-2 font-bold text-xl tracking-wider">
-            <Shield size={24} className="text-red-300" /> BhavanBook <span className="text-red-300">| Admin</span>
+            <Shield size={24} className="text-red-300" /> BhavanBook{" "}
+            <span className="text-red-300">| Admin</span>
           </div>
           <div className="flex items-center gap-6">
-            <span className="text-sm hidden sm:inline">Admin: {user?.fullName}</span>
-            <button onClick={() => setShowProfileModal(true)} className="flex items-center gap-1 hover:text-red-200 transition">
+            <span className="text-sm hidden sm:inline">
+              Admin: {user?.fullName}
+            </span>
+            <button
+              onClick={() => setShowProfileModal(true)}
+              className="flex items-center gap-1 hover:text-red-200 transition"
+            >
               <Settings size={18} /> Profile
             </button>
-            <button onClick={handleLogout} className="flex items-center gap-1 hover:text-red-200 transition">
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-1 hover:text-red-200 transition"
+            >
               <LogOut size={18} /> Logout
             </button>
           </div>
@@ -223,407 +357,102 @@ export default function AdminDashboard() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-          <h1 className="text-2xl font-bold text-gray-900">Admin Control Center</h1>
-          <div className="flex bg-white rounded-lg shadow-sm p-1 border overflow-x-auto">
-            <button onClick={() => setActiveTab('PENDING_ADMIN_APPROVAL')} className={`px-4 py-2 text-sm font-medium rounded-md transition whitespace-nowrap ${activeTab === 'PENDING_ADMIN_APPROVAL' ? 'bg-red-100 text-red-800' : 'text-gray-600 hover:bg-gray-50'}`}>Needs Approval</button>
-            <button onClick={() => setActiveTab('CHECKED_IN')} className={`px-4 py-2 text-sm font-medium rounded-md transition whitespace-nowrap ${activeTab === 'CHECKED_IN' ? 'bg-orange-100 text-orange-800' : 'text-gray-600 hover:bg-gray-50'}`}>Active / Check-Outs</button>
-            <button onClick={() => setActiveTab('ALL')} className={`px-4 py-2 text-sm font-medium rounded-md transition whitespace-nowrap ${activeTab === 'ALL' ? 'bg-gray-200 text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}>All Bookings</button>
-            <button onClick={() => setActiveTab('PENDING_REFUNDS')} className={`px-4 py-2 text-sm font-medium rounded-md transition whitespace-nowrap ${activeTab === 'PENDING_REFUNDS' ? 'bg-red-100 text-red-800' : 'text-gray-600 hover:bg-gray-50'}`}>Pending Refunds</button>
-            <button onClick={() => setActiveTab('STAFF')} className={`px-4 py-2 text-sm font-medium rounded-md transition whitespace-nowrap ${activeTab === 'STAFF' ? 'bg-blue-100 text-blue-800' : 'text-gray-600 hover:bg-gray-50'}`}>Staff</button>
-            <button onClick={() => setActiveTab('REPORTS')} className={`px-4 py-2 text-sm font-medium rounded-md transition whitespace-nowrap ${activeTab === 'REPORTS' ? 'bg-indigo-100 text-indigo-800' : 'text-gray-600 hover:bg-gray-50'}`}>Reports & Analytics</button>
-            <button onClick={() => setActiveTab('FACILITIES')} className={`px-4 py-2 text-sm font-medium rounded-md transition whitespace-nowrap ${activeTab === 'FACILITIES' ? 'bg-purple-100 text-purple-800' : 'text-gray-600 hover:bg-gray-50'}`}>Manage Facilities</button>
+        <div className="flex flex-col xl:flex-row xl:items-center justify-between mb-8 gap-4">
+          <div>
+            <h1 className="text-3xl font-extrabold text-gray-900">
+              Admin Dashboard
+            </h1>
+            <p className="text-gray-600 mt-1">
+              Manage bookings, facilities, and staff.
+            </p>
+          </div>
+
+          <div className="flex bg-white rounded-lg shadow-sm p-1.5 border overflow-x-auto hide-scrollbar">
+            <button
+              onClick={() => setActiveTab("PENDING_ADMIN_APPROVAL")}
+              className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap transition ${activeTab === "PENDING_ADMIN_APPROVAL" ? "bg-red-100 text-red-800" : "text-gray-600 hover:bg-gray-50"}`}
+            >
+              Pending Approval
+            </button>
+            <button
+              onClick={() => setActiveTab("CHECKED_IN")}
+              className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap transition ${activeTab === "CHECKED_IN" ? "bg-blue-100 text-blue-800" : "text-gray-600 hover:bg-gray-50"}`}
+            >
+              Checked In/Out
+            </button>
+            <button
+              onClick={() => setActiveTab("PENDING_REFUNDS")}
+              className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap transition ${activeTab === "PENDING_REFUNDS" ? "bg-orange-100 text-orange-800" : "text-gray-600 hover:bg-gray-50"}`}
+            >
+              Refunds
+            </button>
+            <button
+              onClick={() => setActiveTab("ALL")}
+              className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap transition ${activeTab === "ALL" ? "bg-gray-200 text-gray-900" : "text-gray-600 hover:bg-gray-50"}`}
+            >
+              All Bookings
+            </button>
+
+            <div className="w-px bg-gray-300 mx-1 hidden sm:block"></div>
+
+            <button
+              onClick={() => setActiveTab("FACILITIES")}
+              className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap transition ${activeTab === "FACILITIES" ? "bg-indigo-100 text-indigo-800" : "text-gray-600 hover:bg-gray-50"}`}
+            >
+              Facilities
+            </button>
+            <button
+              onClick={() => setActiveTab("REPORTS")}
+              className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap transition ${activeTab === "REPORTS" ? "bg-green-100 text-green-800" : "text-gray-600 hover:bg-gray-50"}`}
+            >
+              Reports
+            </button>
+            <button
+              onClick={() => setActiveTab("STAFF")}
+              className={`px-4 py-2 text-sm font-medium rounded-md whitespace-nowrap transition ${activeTab === "STAFF" ? "bg-purple-100 text-purple-800" : "text-gray-600 hover:bg-gray-50"}`}
+            >
+              Staff Control
+            </button>
           </div>
         </div>
 
-        {activeTab === 'STAFF' ? (
-          <CreateClerk />
-        ) : activeTab === 'REPORTS' ? (
-          <ReportsView />
-        ) : activeTab === 'FACILITIES' ? (
-          <AdminFacilitiesView />  
-        ): (
-          <div className="bg-white shadow-sm rounded-lg border overflow-hidden">
-             <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-gray-50 text-gray-500 text-sm uppercase tracking-wider border-b">
-                      <th className="p-4 font-medium">Ref ID</th>
-                      <th className="p-4 font-medium">Dates</th>
-                      <th className="p-4 font-medium">Status</th>
-                      <th className="p-4 font-medium">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-sm divide-y divide-gray-100">
-                    {filteredBookings.length === 0 && (
-                      <tr><td colSpan="4" className="p-8 text-center text-gray-500">No bookings found in this category.</td></tr>
-                    )}
-                    {filteredBookings.map((booking) => {
-                       const schedule = booking.schedule || {};
-                       return (
-                          <tr key={booking.id} className="hover:bg-gray-50 transition">
-                            <td className="p-4 text-gray-900 font-mono text-xs">{booking.id.substring(0, 8).toUpperCase()}</td>
-                            <td className="p-4 whitespace-nowrap">
-                              <span className="text-green-700 font-medium block">In: {formatDate(schedule.startTime)}</span>
-                              <span className="text-red-700 font-medium block">Out: {formatDate(schedule.endTime)}</span>
-                            </td>
-                            <td className="p-4">
-                              <span className="px-2 py-1 text-xs font-bold rounded-full bg-gray-100 text-gray-800">{booking.status.replace(/_/g, ' ')}</span>
-                            </td>
-                            <td className="p-4 flex flex-wrap gap-2">
-                              {booking.status === 'PENDING_ADMIN_APPROVAL' && (
-                                <>
-                                  <button onClick={() => handleOpenApproveModal(booking)} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs transition">Approve</button>
-                                  <button onClick={() => handleRejectBooking(booking.id)} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs transition">Reject</button>
-                                </>
-                              )}
-                              
-                              {booking.status === 'CHECKED_IN' && (
-                                <button onClick={() => handleOpenInvoiceModal(booking)} className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded text-xs transition flex items-center gap-1">
-                                  <FileText size={14}/> Review Check-Out
-                                </button>
-                              )}
-
-                              {/* 1. CANCELLATION PENDING APPROVAL */}
-                              {booking.status === 'PENDING_CANCELLATION' && (
-                                <div className="flex flex-col gap-2 min-w-[150px] max-w-[220px]">
-                                  <div className="bg-purple-50 text-purple-800 text-xs p-2 rounded border border-purple-200 shadow-inner">
-                                    <span className="block font-bold mb-1">Refund: ₹{booking.financials?.refundAmount || 0}</span>
-                                    <span className="block text-[10px] uppercase tracking-wider font-semibold text-purple-600 border-b border-purple-200 pb-1 mb-1">
-                                      Mode: {booking.financials?.razorpayPaymentIds?.length > 0 ? 'Online Auto' : 'Manual Cash'}
-                                    </span>
-                                    <span className="block text-[10px] font-bold text-gray-700">User's Reason:</span>
-                                    <span className="block text-[10px] italic text-gray-600 break-words whitespace-normal">{booking.cancellationReason}</span>
-                                  </div>
-                                  <button 
-                                    onClick={() => handleProcessRefund(booking)} 
-                                    className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded text-xs font-semibold transition flex items-center justify-center gap-1 shadow-sm w-full"
-                                  >
-                                    <CreditCard size={14}/> 
-                                    Approve Cancellation
-                                  </button>
-                                </div>
-                              )}
-
-                              {/* 1.5 MANUAL CASH REFUND PENDING HANDOVER (NEW BUTTON) */}
-                              {booking.status === 'CANCELLED' && booking.financials?.refundAmount > 0 && booking.financials?.paymentStatus === 'PARTIAL' && (
-                                <div className="flex flex-col gap-2 min-w-[150px] max-w-[220px]">
-                                  <div className="bg-orange-50 text-orange-800 text-xs p-2 rounded border border-orange-200 shadow-inner">
-                                    <span className="block font-bold mb-1 text-orange-700">Cash Due: ₹{booking.financials?.refundAmount || 0}</span>
-                                    <span className="block text-[10px] font-bold text-gray-700">User's Reason:</span>
-                                    <span className="block text-[10px] italic text-gray-600 break-words whitespace-normal">{booking.cancellation.cancellationReason}</span>
-                                  </div>
-                                  <button 
-                                    onClick={async () => {
-                                      if(window.confirm('Confirm you have handed over the cash to the user?')) {
-                                          try {
-                                              await api.patch(`/bookings/${booking.id}/complete-manual-refund`, { refundNote: 'Cash handed at desk' });
-                                              toast.success('Manual refund marked as completed.');
-                                              fetchBookings();
-                                          } catch(err) { toast.error(err.response?.data?.message || 'Failed to complete refund'); }
-                                      }
-                                    }}
-                                    className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-2 rounded text-xs font-semibold transition flex items-center justify-center gap-1 shadow-sm w-full"
-                                  >
-                                    <CheckCircle size={14}/> 
-                                    Confirm Cash Given
-                                  </button>
-                                </div>
-                              )}
-
-                              {/* 2. CANCELLATION REFUND COMPLETED */}
-                              {booking.status === 'CANCELLED' && booking.financials?.refundAmount > 0 && booking.financials?.paymentStatus === 'REFUNDED' && (
-                                <div className="flex flex-col gap-1 min-w-[150px] max-w-[220px]">
-                                  <span className="px-2 py-1.5 text-[11px] font-bold rounded bg-green-100 text-green-800 border border-green-200 text-center flex items-center justify-center gap-1 shadow-sm">
-                                    <CheckCircle size={14}/> Refund Completed
-                                  </span>
-                                  <div className="bg-gray-50 text-gray-700 text-[10px] p-2 rounded border border-gray-200 shadow-inner break-words whitespace-normal">
-                                    <span className="font-bold">Reason:</span> <span className="italic">{booking.cancellationReason}</span>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* 3. CANCELLATION WITH NO REFUND APPLICABLE */}
-                              {booking.status === 'CANCELLED' && (!booking.financials?.refundAmount || booking.financials?.refundAmount <= 0) && (
-                                <div className="flex flex-col gap-1 min-w-[150px] max-w-[220px]">
-                                  <span className="px-2 py-1.5 text-[11px] font-bold rounded bg-gray-100 text-gray-600 border border-gray-300 text-center shadow-sm">
-                                    No Refund Due
-                                  </span>
-                                  <div className="bg-gray-50 text-gray-700 text-[10px] p-2 rounded border border-gray-200 shadow-inner break-words whitespace-normal">
-                                    <span className="font-bold">Reason:</span> <span className="italic">{booking.cancellationReason}</span>
-                                  </div>
-                                </div>
-                              )}
-
-                              {booking.status === 'CHECKED_OUT' && (
-                                <button 
-                                  onClick={async () => {
-                                    try {
-                                      const response = await api.get(`/billing/${booking.id}/invoice`);
-                                      setPrintModal({ invoice: response.data.data.invoice, booking });
-                                    } catch(err) { toast.error("Invoice not found."); }
-                                  }} 
-                                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs transition flex items-center gap-1 h-fit">
-                                  <FileText size={14}/> View Bill
-                                </button>
-                              )}
-                              
-                              <button onClick={() => setViewingDetails(booking)} className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1.5 rounded text-xs transition flex items-center gap-1 h-fit"><Eye size={14}/> Details</button>
-                            </td>
-                          </tr>
-                       )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-          </div>
-        )}
+        {renderMainContent()}
       </div>
 
-      <AdminProfileModal 
-        isOpen={showProfileModal} 
-        onClose={() => setShowProfileModal(false)} 
+      <AdminProfileModal
+        isOpen={showProfileModal}
+        onClose={() => setShowProfileModal(false)}
       />
 
-      {/* DETAILED VIEW MODAL */}
       {viewingDetails && (
-        <BookingDetailsModal 
-          booking={viewingDetails} 
-          onClose={() => setViewingDetails(null)} 
+        <BookingDetailsModal
+          booking={viewingDetails}
+          onClose={() => setViewingDetails(null)}
         />
       )}
 
-      {/* INITIAL BOOKING APPROVAL MODAL */}
-      {approvingBooking && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md relative">
-            <button onClick={() => setApprovingBooking(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={20} /></button>
-            <h2 className="text-xl font-bold text-gray-900 mb-2">Admin Approval</h2>
-            <p className="text-sm text-gray-500 mb-6 border-b pb-4">Adjust pricing and define payment holding rules.</p>
-            
-            <form onSubmit={handleConfirmApproval} className="space-y-4">
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Revised Base Amount (₹)</label>
-                <input type="number" required min="0" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} className="w-full px-4 py-2 border rounded-md text-lg font-semibold focus:ring-red-500 focus:border-red-500" />
-              </div>
+      {/* EXTRACTED MODALS IN ACTION */}
+      <AdminApprovalModal
+        booking={approvingBooking}
+        onClose={() => setApprovingBooking(null)}
+        onApprove={handleConfirmApproval}
+        isSubmitting={isSubmitting}
+      />
 
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">Security Deposit (₹)</label>
-                <input type="number" required min="0" value={overrideSecurityDeposit} onChange={(e) => setOverrideSecurityDeposit(e.target.value)} className="w-full px-4 py-2 border rounded-md text-lg font-semibold focus:ring-red-500 focus:border-red-500" />
-              </div>
+      <AdminInvoiceModal
+        modalData={invoiceModal}
+        onClose={() => setInvoiceModal(null)}
+        onAction={handleInvoiceAction}
+        isSubmitting={isSubmitting}
+      />
 
-              <div className="mt-4 border-t pt-4">
-                <label className="flex items-center gap-2 font-bold text-gray-800 cursor-pointer">
-                  <input 
-                    type="checkbox" 
-                    checked={isHoldingAllowed} 
-                    onChange={(e) => setIsHoldingAllowed(e.target.checked)} 
-                    className="w-5 h-5 text-red-600 rounded focus:ring-red-500" 
-                  />
-                  Allow user to pay a partial amount to HOLD dates?
-                </label>
-              </div>
-
-              {isHoldingAllowed && (
-                <div className="grid grid-cols-2 gap-4 mt-3 bg-red-50 p-3 rounded-lg border border-red-100">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Hold Percentage (%)</label>
-                    <input type="number" required min="1" max="100" value={holdingPercentage} onChange={(e) => setHoldingPercentage(e.target.value)} className="w-full px-3 py-1.5 border rounded-md" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-700 mb-1">Validity (Days)</label>
-                    <input type="number" required min="1" value={holdingValidityDays} onChange={(e) => setHoldingValidityDays(e.target.value)} className="w-full px-3 py-1.5 border rounded-md" />
-                  </div>
-                </div>
-              )}
-
-              <div className="pt-4 flex gap-3">
-                <button type="button" onClick={() => setApprovingBooking(null)} className="flex-1 py-2 bg-gray-100 text-gray-700 font-medium rounded-md hover:bg-gray-200 transition">Cancel</button>
-                <button type="submit" disabled={isSubmitting} className="flex-1 py-2 bg-green-600 text-white font-medium rounded-md hover:bg-green-700 transition disabled:opacity-50">
-                  {isSubmitting ? 'Approving...' : 'Confirm Approval'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* CHECK-OUT / INVOICE APPROVAL MODAL */}
-      {invoiceModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-4xl relative max-h-[90vh] overflow-y-auto">
-            <button onClick={() => setInvoiceModal(null)} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"><X size={24} /></button>
-            <h2 className="text-2xl font-bold text-gray-900 mb-1">Review Draft Invoice</h2>
-            <p className="text-sm text-gray-500 mb-6 border-b pb-4">Verify clerk's check-out deductions and final bill before approving.</p>
-            
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              
-              {/* LEFT COLUMN: CLERK'S ENTRIES & ADMIN ACTIONS */}
-              <div className="space-y-6">
-                <div className="bg-gray-50 p-4 rounded-lg border space-y-3 text-sm">
-                  <h3 className="font-bold text-gray-800 border-b pb-2 flex items-center gap-2">
-                    <CheckCircle size={16} className="text-blue-600" /> Clerk's Data Entry
-                  </h3>
-                  
-                  <div className="flex justify-between"><span className="text-gray-600">Electricity Consumed:</span><span className="font-semibold">{invoiceModal.invoice.electricityUnitsConsumed || 0} units (₹{invoiceModal.invoice.electricityCharges})</span></div>
-                  <div className="flex justify-between"><span className="text-gray-600">Cleaning Charges:</span><span className="font-semibold">₹{invoiceModal.invoice.cleaningCharges || 0}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-600">Generator Charges:</span><span className="font-semibold">₹{invoiceModal.invoice.generatorCharges || 0}</span></div>
-                  
-                  {invoiceModal.invoice.additionalItems?.length > 0 && (
-                    <div className="pt-2 mt-2 border-t">
-                      <span className="font-bold text-blue-700 flex items-center gap-1"><Plus size={14}/> Extra Items Added:</span>
-                      <ul className="mt-1 space-y-1">
-                        {invoiceModal.invoice.additionalItems.map((item, i) => (
-                          <li key={i} className="flex justify-between text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                            <span>{item.name}</span><span>₹{item.amount}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {invoiceModal.invoice.damagesAndPenalties?.length > 0 && (
-                    <div className="pt-2 mt-2 border-t">
-                      <span className="font-bold text-red-700 flex items-center gap-1"><AlertTriangle size={14}/> Damages/Penalties:</span>
-                      <ul className="mt-1 space-y-1">
-                        {invoiceModal.invoice.damagesAndPenalties.map((p, i) => (
-                          <li key={i} className="flex justify-between text-red-600 bg-red-50 px-2 py-1 rounded">
-                            <span>{p.reason}</span><span>₹{p.amount}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-
-                  {invoiceModal.invoice.discountAmount > 0 && (
-                    <div className="pt-2 mt-2 border-t flex justify-between font-bold text-green-700">
-                      <span>Discount Applied:</span><span>- ₹{invoiceModal.invoice.discountAmount}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Admin Remarks / Notes</label>
-                  <textarea 
-                    rows="3" 
-                    value={invoiceRemarks} 
-                    onChange={(e) => setInvoiceRemarks(e.target.value)} 
-                    placeholder="Required if rejecting back to clerk. Otherwise optional."
-                    className="w-full px-3 py-2 border rounded-md focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  ></textarea>
-                </div>
-
-                <div className="pt-2 flex gap-3">
-                  <button 
-                    type="button" 
-                    onClick={() => handleInvoiceAction('REJECTED')} 
-                    disabled={isSubmitting} 
-                    className="flex-1 py-3 bg-red-100 text-red-700 font-bold rounded-md hover:bg-red-200 transition disabled:opacity-50 shadow-sm"
-                  >
-                    Reject to Clerk
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => handleInvoiceAction('APPROVED')} 
-                    disabled={isSubmitting} 
-                    className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-md hover:bg-blue-700 transition disabled:opacity-50 shadow-md"
-                  >
-                    {isSubmitting ? 'Processing...' : 'Approve Check-Out'}
-                  </button>
-                </div>
-              </div>
-
-              {/* RIGHT COLUMN: BILL PREVIEW */}
-              <div className="bg-gray-900 text-white p-6 rounded-xl shadow-inner flex flex-col justify-between h-full">
-                {(() => {
-                  const inv = invoiceModal.invoice;
-                  const base = Number(inv.baseAmount) || 0;
-                  const extras = Number(inv.totalAdditionalAmount) || 0;
-                  const discount = Number(inv.discountAmount) || 0;
-
-                  const utilities = Number(inv.electricityCharges || 0) + Number(inv.cleaningCharges || 0) + Number(inv.generatorCharges || 0);
-                  const penalties = inv.damagesAndPenalties?.reduce((sum, p) => sum + Number(p.amount), 0) || 0;
-                  const totalDeductions = Number(inv.totalDeductions) || 0;
-
-                  const taxable = Math.max(0, base + extras + totalDeductions - discount);
-
-                  const cgst = Number(inv.cgstAmount || 0);
-                  const sgst = Number(inv.sgstAmount || 0);
-                  const taxes = cgst + sgst;
-
-                  const cgstRate = taxable > 0 ? Number(((cgst / taxable) * 100).toFixed(1)) : 0;
-                  const sgstRate = taxable > 0 ? Number(((sgst / taxable) * 100).toFixed(1)) : 0;
-                  const totalGstRate = cgstRate + sgstRate;
-
-                  const grandTotalCost = Number(inv.totalAmount) || 0;
-
-                  const paid = base + Number(inv.securityDepositHeld || 0);
-                  
-                  const refundDue = Number(inv.finalRefundAmount) || 0;
-                  const balanceDue = Number(inv.additionalBalanceDue) || 0;
-
-                  return (
-                    <>
-                      <div>
-                        <h3 className="font-bold text-xl border-b border-gray-700 pb-3 mb-5 text-blue-300">Final Bill Preview</h3>
-                        <div className="space-y-3 text-sm text-gray-300">
-                          <div className="flex justify-between"><span>Base Booking:</span><span>₹{base.toLocaleString('en-IN')}</span></div>
-                          {extras > 0 && <div className="flex justify-between text-blue-200"><span>Extra Items Added:</span><span>+ ₹{extras.toLocaleString('en-IN')}</span></div>}
-                          {totalDeductions > 0 && <div className="flex justify-between text-orange-300"><span>Utilities & Penalties:</span><span>+ ₹{totalDeductions.toLocaleString('en-IN')}</span></div>}
-                          {discount > 0 && <div className="flex justify-between text-green-400 font-bold"><span>Discount Applied:</span><span>- ₹{discount.toLocaleString('en-IN')}</span></div>}
-                          
-                          <div className="flex justify-between font-semibold text-white pt-2 border-t border-gray-700 mt-2"><span>Total Taxable Amount:</span><span>₹{taxable.toLocaleString('en-IN')}</span></div>
-                          <div className="flex justify-between"><span>Taxes ({totalGstRate}% GST):</span><span>+ ₹{taxes.toLocaleString('en-IN')}</span></div>
-                          
-                          <div className="border-t border-gray-700 my-4"></div>
-
-                          <div className="flex justify-between font-bold text-lg text-white"><span>Grand Total Event Cost:</span><span>₹{grandTotalCost.toLocaleString('en-IN')}</span></div>
-                          <div className="flex justify-between font-bold text-green-400 mt-2"><span>Total Paid Upfront:</span><span>₹{paid.toLocaleString('en-IN')}</span></div>
-                        </div>
-                      </div>
-
-                      <div className="mt-8 pt-6 border-t-2 border-gray-700 text-center">
-                        {refundDue > 0 ? (
-                           <div className="bg-green-900/40 text-green-400 p-4 rounded-xl border border-green-700/50 shadow-inner flex flex-col items-center">
-                             <span className="block text-xs uppercase tracking-wider mb-1 font-bold text-green-500">To be refunded</span>
-                             <span className="text-3xl font-extrabold">₹{refundDue.toLocaleString('en-IN')}</span>
-                             <span className="mt-2 text-[10px] uppercase tracking-wider px-2 py-1 rounded bg-green-800/50 text-green-200 border border-green-600/50">
-                               Mode: {inv.settlementMode || 'ONLINE'}{invoiceModal.booking?.bookingSource === 'WALK_IN' ? '(Walk-in)' : ''}
-                             </span>
-                           </div>
-                        ) : balanceDue > 0 ? (
-                           <div className="bg-red-900/40 text-red-400 p-4 rounded-xl border border-red-700/50 shadow-inner flex flex-col items-center">
-                             <span className="block text-xs uppercase tracking-wider mb-1 font-bold text-red-500">Balance Due (User Pays)</span>
-                             <span className="text-3xl font-extrabold">₹{balanceDue.toLocaleString('en-IN')}</span>
-                             <span className="mt-2 text-[10px] uppercase tracking-wider px-2 py-1 rounded bg-red-800/50 text-red-200 border border-red-600/50">
-                               Mode: {inv.settlementMode || 'ONLINE'}{invoiceModal.booking?.bookingSource === 'WALK_IN' ? '(Walk-in)' : ''}
-                             </span>
-                           </div>
-                        ) : (
-                           <div className="bg-gray-800 text-gray-300 p-4 rounded-xl border border-gray-600 shadow-inner flex flex-col items-center">
-                             <span className="block text-xs uppercase tracking-wider mb-1 font-bold">Settlement</span>
-                             <span className="text-2xl font-bold">Fully Settled (₹0)</span>
-                           </div>
-                        )}
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            </div>
-            
-          </div>
-        </div>
-      )}
-      
       {printModal && (
-        <InvoicePrintView 
-          invoice={printModal.invoice} 
-          booking={printModal.booking} 
-          onClose={() => setPrintModal(null)} 
+        <InvoicePrintView
+          invoice={printModal.invoice}
+          booking={printModal.booking}
+          onClose={() => setPrintModal(null)}
         />
       )}
-
     </div>
   );
 }

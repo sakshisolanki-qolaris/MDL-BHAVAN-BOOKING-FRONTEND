@@ -1,0 +1,6 @@
+projectKey=Bhavan-Booking-frontend
+serverUrl=https://sonarqube.qolarisdata.com
+serverVersion=26.2.0.119303
+dashboardUrl=https://sonarqube.qolarisdata.com/dashboard?id=Bhavan-Booking-frontend
+ceTaskId=f3f934d8-1ca7-4b05-8838-e61547635a7f
+ceTaskUrl=https://sonarqube.qolarisdata.com/api/ce/task?id=f3f934d8-1ca7-4b05-8838-e61547635a7f

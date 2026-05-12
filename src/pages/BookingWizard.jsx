@@ -1,89 +1,262 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import api from '../api/axios';
-import { toast } from 'react-toastify';
-import useAuthStore from '../store/useAuthStore';
+import { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import api from "../api/axios";
+import { toast } from "react-toastify";
+import useAuthStore from "../store/useAuthStore";
 
 // Import our components
-import StaffBookingForm from '../components/booking/StaffBookingForm';
-import FacilityExtrasList from '../components/booking/FacilityExtrasList';
-import BookingWidget from '../components/booking/BookingWidget';
+import StaffBookingForm from "../components/booking/StaffBookingForm";
+import FacilityExtrasList from "../components/booking/FacilityExtrasList";
+import BookingWidget from "../components/booking/BookingWidget";
 
 const toLocalISOString = (date) => {
-  const tzOffset = (new Date()).getTimezoneOffset() * 60000;
+  const tzOffset = new Date().getTimezoneOffset() * 60000;
   return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+};
+
+const createDateFromStr = (dateStr, timeStr) =>
+  new Date(`${dateStr.split("T")[0]}T${timeStr}:00`);
+
+// --- EXTRACTED DATE CALCULATION HELPERS ---
+
+const getCustomModeDates = (startDate, endDate, isOnlyMiniHall, hasRoom) => {
+  if (isOnlyMiniHall && startDate) {
+    const start = new Date(startDate);
+    const end = new Date(startDate);
+    start.setHours(18, 0); // 6:00 PM
+    end.setHours(23, 0); // 11:00 PM
+    return { isValid: true, finalStart: start, finalEnd: end };
+  }
+
+  if (startDate && endDate) {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    start.setHours(hasRoom ? 10 : 8, 0);
+    end.setHours(8, 0);
+    return { isValid: true, finalStart: start, finalEnd: end };
+  }
+
+  return { isValid: false, finalStart: null, finalEnd: null };
+};
+
+const getSlotPricingDates = (
+  startDate,
+  facility,
+  selectedSlot,
+  startTimeInput,
+) => {
+  const slotType = facility.pricingDetails?.slotType;
+
+  if (slotType === "FIXED" && selectedSlot && startDate) {
+    return {
+      isValid: true,
+      finalStart: createDateFromStr(startDate, selectedSlot.startTime),
+      finalEnd: createDateFromStr(startDate, selectedSlot.endTime),
+    };
+  }
+
+  if (slotType === "FLEXIBLE" && startDate && startTimeInput) {
+    const duration = Number(facility.pricingDetails.durationHours) || 1;
+    const start = createDateFromStr(startDate, startTimeInput);
+    const end = new Date(start);
+    end.setHours(end.getHours() + duration);
+    return { isValid: true, finalStart: start, finalEnd: end };
+  }
+
+  return { isValid: false, finalStart: null, finalEnd: null };
+};
+
+const getTieredPricingDates = (startDate, bookingOption) => {
+  if (startDate && bookingOption) {
+    const days = Number.parseInt(bookingOption.split("_")[0], 10) || 1;
+    const start = new Date(startDate);
+    start.setHours(10, 0, 0, 0);
+    const end = new Date(startDate);
+    end.setDate(end.getDate() + days);
+    end.setHours(8, 0, 0, 0);
+    return { isValid: true, finalStart: start, finalEnd: end };
+  }
+  return { isValid: false, finalStart: null, finalEnd: null };
+};
+
+const getStandardPricingDates = (startDate, endDate) => {
+  if (startDate && endDate) {
+    const start = new Date(startDate);
+    start.setHours(10, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(8, 0, 0, 0);
+    return { isValid: true, finalStart: start, finalEnd: end };
+  }
+  return { isValid: false, finalStart: null, finalEnd: null };
+};
+
+// FIX: Refactored to act as a router, reducing cognitive complexity drastically
+const calculateBookingDates = ({
+  startDate,
+  endDate,
+  facility,
+  isCustomMode,
+  isOnlyMiniHall,
+  hasRoom,
+  selectedSlot,
+  startTimeInput,
+  bookingOption,
+}) => {
+  if (!startDate || !facility) {
+    return { isValid: false, finalStart: null, finalEnd: null };
+  }
+
+  if (isCustomMode) {
+    return getCustomModeDates(startDate, endDate, isOnlyMiniHall, hasRoom);
+  }
+
+  if (facility.pricingType === "SLOT") {
+    return getSlotPricingDates(
+      startDate,
+      facility,
+      selectedSlot,
+      startTimeInput,
+    );
+  }
+
+  if (facility.pricingType === "TIERED") {
+    return getTieredPricingDates(startDate, bookingOption);
+  }
+
+  if (
+    ["HOURLY", "FIXED"].includes(facility.pricingType) ||
+    facility.facilityType === "ROOM"
+  ) {
+    return getStandardPricingDates(startDate, endDate);
+  }
+
+  return { isValid: false, finalStart: null, finalEnd: null };
+};
+
+// --- EXTRACTED STATE CALCULATION HELPERS ---
+
+const updateExtraItemsAvailability = (prevItems, updatedFacilities) => {
+  return prevItems.map((item) => {
+    const updatedItem = updatedFacilities.find((f) => f.id === item.id);
+    return updatedItem
+      ? { ...item, isAvailableForDates: updatedItem.isAvailableForDates }
+      : item;
+  });
+};
+
+const filterAvailableSelectedExtras = (prevSelected, updatedFacilities) => {
+  let itemsRemoved = false;
+  const validEntries = Object.entries(prevSelected).filter(([id]) => {
+    const updatedItem = updatedFacilities.find((f) => f.id === id);
+    if (updatedItem?.isAvailableForDates === false) {
+      itemsRemoved = true;
+      return false;
+    }
+    return true;
+  });
+  return { newSelected: Object.fromEntries(validEntries), itemsRemoved };
+};
+
+const resetExtraItemsAvailability = (prevItems) => {
+  return prevItems.map((item) => ({ ...item, isAvailableForDates: true }));
 };
 
 export default function BookingWizard() {
   const { facilityId } = useParams();
-  const isCustomMode = facilityId === 'custom';
-  
+  const isCustomMode = facilityId === "custom";
+
   const navigate = useNavigate();
   const { isAuthenticated, role } = useAuthStore();
-  const isStaff = role === 'ADMIN' || role === 'CLERK';
+  const isStaff = role === "ADMIN" || role === "CLERK";
 
   const [facility, setFacility] = useState(null);
-  const [extraItems, setExtraItems] = useState([]); 
-  const [selectedExtras, setSelectedExtras] = useState({}); 
+  const [extraItems, setExtraItems] = useState([]);
+  const [selectedExtras, setSelectedExtras] = useState({});
   const [loading, setLoading] = useState(true);
-  
-  // State for Image Gallery
+
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-  
-  // Booking Selection State
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [bookingOption, setBookingOption] = useState(''); // Used for TIERED (e.g., "1", "2" days)
-  const [selectedSlot, setSelectedSlot] = useState(null); // Used for dynamic FIXED slots
-  const [startTimeInput, setStartTimeInput] = useState('');
-  const [formData, setFormData] = useState({ startTime: '', endTime: '', guestCount: 1, eventType: 'Marriage' });
-  const [customerData, setCustomerData] = useState({ fullName: '', email: '', mobile: '', address: '' });
-  
-  // 🚨 NEW: State for Walk-in Holds
+
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [bookingOption, setBookingOption] = useState("");
+  const [selectedSlot, setSelectedSlot] = useState(null);
+  const [startTimeInput, setStartTimeInput] = useState("");
+
+  const [formData, setFormData] = useState({
+    startTime: "",
+    endTime: "",
+    guestCount: 1,
+    eventType: "Marriage",
+  });
+
+  const [customerData, setCustomerData] = useState({
+    fullName: "",
+    email: "",
+    mobile: "",
+    address: "",
+  });
+
   const [holdData, setHoldData] = useState({
     isHoldingAllowed: false,
     holdingPercentage: 20,
-    holdingValidityDays: 2
+    holdingValidityDays: 2,
   });
-  
+
   const [availability, setAvailability] = useState(null);
-  const [partialAvailability, setPartialAvailability] = useState(null); 
+  const [partialAvailability, setPartialAvailability] = useState(null);
   const [isChecking, setIsChecking] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchFacilities = async () => {
       try {
-        const response = await api.get('/facilities');
+        const response = await api.get("/facilities");
         const facilities = response.data.data;
-        
+
         if (isCustomMode) {
           setFacility({
-            id: 'custom', name: 'Build Your Custom Booking',
-            description: 'Select the specific facilities you need.',
-            baseRate: 0, pricingType: 'MIXED'
+            id: "custom",
+            name: "Build Your Custom Booking",
+            description: "Select the specific facilities you need.",
+            baseRate: 0,
+            pricingType: "MIXED",
           });
-          const customOptions = facilities.filter(f => f.facilityType !== 'PACKAGE' && f.facilityType !== 'COMPLEX');
-          setExtraItems(customOptions.map(item => ({ ...item, isAvailableForDates: true })));
+          const customOptions = facilities.filter(
+            (f) => f.facilityType !== "PACKAGE" && f.facilityType !== "COMPLEX",
+          );
+          setExtraItems(
+            customOptions.map((item) => ({
+              ...item,
+              isAvailableForDates: true,
+            })),
+          );
         } else {
-          const found = facilities.find(f => f.id === facilityId);
+          const found = facilities.find((f) => f.id === facilityId);
           if (found) {
-            // Ensure pricingDetails is an object (in case it comes as a string)
-            if (typeof found.pricingDetails === 'string') {
+            if (typeof found.pricingDetails === "string") {
               found.pricingDetails = JSON.parse(found.pricingDetails);
             }
             setFacility(found);
           } else {
-            toast.error('Facility not found');
+            toast.error("Facility not found");
           }
-          
+
           let extras = [];
-          if (found?.name?.toLowerCase().includes('complete bhavan')) {
-             extras = facilities.filter(f => f.name.toLowerCase().includes('mini hall'));
+          if (found?.name?.toLowerCase().includes("complete bhavan")) {
+            extras = facilities.filter((f) =>
+              f.name.toLowerCase().includes("mini hall"),
+            );
           }
-          setExtraItems(extras.map(item => ({ ...item, isAvailableForDates: true })));
+          setExtraItems(
+            extras.map((item) => ({ ...item, isAvailableForDates: true })),
+          );
         }
-      } catch (error) { toast.error('Failed to load details'); } finally { setLoading(false); }
+      } catch (error) {
+        console.error("Failed to load facilities:", error);
+        toast.error("Failed to load details");
+      } finally {
+        setLoading(false);
+      }
     };
     fetchFacilities();
   }, [facilityId, isCustomMode]);
@@ -93,311 +266,371 @@ export default function BookingWizard() {
 
   if (isCustomMode) {
     const selectedIds = Object.keys(selectedExtras);
-    if (selectedIds.length === 1 && extraItems.find(i => i.id === selectedIds[0])?.name.toLowerCase().includes('mini hall')) {
+    if (
+      selectedIds.length === 1 &&
+      extraItems
+        .find((i) => i.id === selectedIds[0])
+        ?.name.toLowerCase()
+        .includes("mini hall")
+    ) {
       isOnlyMiniHall = true;
     }
-    selectedIds.forEach(id => { if (extraItems.find(i => i.id === id)?.facilityType === 'ROOM') hasRoom = true; });
+    selectedIds.forEach((id) => {
+      if (extraItems.find((i) => i.id === id)?.facilityType === "ROOM")
+        hasRoom = true;
+    });
   }
 
   let needsEndDate = false;
-  if (isCustomMode) { 
-    needsEndDate = Object.keys(selectedExtras).length > 0 && !isOnlyMiniHall; 
-  } else if (facility) { 
-    if (facility.pricingType === 'FIXED' || facility.facilityType === 'ROOM' || facility.pricingType === 'HOURLY') {
-      needsEndDate = true; 
+  if (isCustomMode) {
+    needsEndDate = Object.keys(selectedExtras).length > 0 && !isOnlyMiniHall;
+  } else if (facility) {
+    if (
+      facility.pricingType === "FIXED" ||
+      facility.facilityType === "ROOM" ||
+      facility.pricingType === "HOURLY"
+    ) {
+      needsEndDate = true;
     }
   }
 
-// -----------------------------------------------------------------------------------
-  // 🚀 THE DYNAMIC TIME CALCULATION ENGINE (UPDATED WITH 10 AM - 8 AM DEFAULTS)
+  // -----------------------------------------------------------------------------------
+  // 🚀 THE DYNAMIC TIME CALCULATION ENGINE
   // -----------------------------------------------------------------------------------
   useEffect(() => {
-    if (!startDate || !facility) return;
-    
-    let finalStart = null;
-    let finalEnd = null;
-    let isValid = false;
-
-    // Helper: Safely parse date and time string to Date object
-    const createDate = (dateStr, timeStr) => new Date(`${dateStr.split('T')[0]}T${timeStr}:00`);
-
-    if (isCustomMode) {
-      if (isOnlyMiniHall) {
-        if (startDate) {
-          finalStart = new Date(startDate);
-          finalEnd = new Date(startDate); 
-          finalStart.setHours(18, 0);     // 6:00 PM
-          finalEnd.setHours(23, 0);       // 11:00 PM
-          isValid = true;
-        }
-      } else {
-        if (startDate && endDate) {
-          finalStart = new Date(startDate);
-          finalEnd = new Date(endDate);
-          if (hasRoom) { 
-            finalStart.setHours(10, 0); 
-            finalEnd.setHours(8, 0); 
-          } else { 
-            finalStart.setHours(8, 0); 
-            finalEnd.setHours(8, 0); 
-          }
-          isValid = true;
-        }
-      }
-    } else {
-      if (facility.pricingType === 'SLOT') {
-        if (facility.pricingDetails?.slotType === 'FIXED') {
-          if (selectedSlot && startDate) {
-            finalStart = createDate(startDate, selectedSlot.startTime);
-            finalEnd = createDate(startDate, selectedSlot.endTime);
-            isValid = true;
-          }
-        } 
-        else if (facility.pricingDetails?.slotType === 'FLEXIBLE') {
-          if (startDate && startTimeInput) {
-            const duration = Number(facility.pricingDetails.durationHours) || 1;
-            finalStart = createDate(startDate, startTimeInput);
-            finalEnd = new Date(finalStart.getTime());
-            finalEnd.setHours(finalEnd.getHours() + duration);
-            isValid = true;
-          }
-        }
-      } else if (facility.pricingType === 'TIERED') {
-        // 🚨 FIX FOR TIERED PACKAGES (Dropdown selection: 1 Day, 2 Days)
-        if (startDate && bookingOption) {
-          const days = parseInt(bookingOption.split('_')[0]) || 1;
-          finalStart = new Date(startDate);
-          finalStart.setHours(10, 0, 0, 0); // Force exactly 10:00 AM Check-in
-          
-          finalEnd = new Date(startDate);
-          finalEnd.setDate(finalEnd.getDate() + days); // Add the duration days
-          finalEnd.setHours(8, 0, 0, 0); // Force exactly 08:00 AM Check-out
-          
-          isValid = true;
-        }
-      } else if (facility.pricingType === 'HOURLY' || facility.pricingType === 'FIXED' || facility.facilityType === 'ROOM') {
-        // 🚨 FIX FOR FIXED PACKAGES (Start Date & End Date selection)
-        if (startDate && endDate) {
-          finalStart = new Date(startDate);
-          finalStart.setHours(10, 0, 0, 0); // Force exactly 10:00 AM Check-in
-          
-          finalEnd = new Date(endDate);
-          finalEnd.setHours(8, 0, 0, 0); // Force exactly 08:00 AM Check-out
-          
-          isValid = true;
-        }
-      }
-    }
+    const { isValid, finalStart, finalEnd } = calculateBookingDates({
+      startDate,
+      endDate,
+      facility,
+      isCustomMode,
+      isOnlyMiniHall,
+      hasRoom,
+      selectedSlot,
+      startTimeInput,
+      bookingOption,
+    });
 
     if (isValid && finalStart && finalEnd) {
       if (finalEnd <= finalStart) {
-         toast.error("Check-out time must be after check-in time.");
-         setFormData(prev => ({ ...prev, startTime: '', endTime: '' })); 
-         return;
+        toast.error("Check-out time must be after check-in time.");
+        setFormData((prev) => ({ ...prev, startTime: "", endTime: "" }));
+        return;
       }
-      setFormData(prev => ({ 
-        ...prev, 
-        startTime: toLocalISOString(finalStart), 
-        endTime: toLocalISOString(finalEnd) 
+      setFormData((prev) => ({
+        ...prev,
+        startTime: toLocalISOString(finalStart),
+        endTime: toLocalISOString(finalEnd),
       }));
-    } else { 
-      setFormData(prev => ({ ...prev, startTime: '', endTime: '' })); 
+    } else {
+      setFormData((prev) => ({ ...prev, startTime: "", endTime: "" }));
     }
-  }, [startDate, endDate, bookingOption, selectedSlot, startTimeInput, facility, isCustomMode, needsEndDate, hasRoom, isOnlyMiniHall]);
-
+  }, [
+    startDate,
+    endDate,
+    bookingOption,
+    selectedSlot,
+    startTimeInput,
+    facility,
+    isCustomMode,
+    needsEndDate,
+    hasRoom,
+    isOnlyMiniHall,
+  ]);
 
   useEffect(() => {
     const checkItemAvailability = async () => {
       if (formData.startTime && formData.endTime) {
         try {
-          const response = await api.get(`/facilities?startDate=${formData.startTime}&endDate=${formData.endTime}`);
+          const response = await api.get(
+            `/facilities?startDate=${formData.startTime}&endDate=${formData.endTime}`,
+          );
           const updatedFacilities = response.data.data;
-          setExtraItems(prevItems => prevItems.map(item => {
-              const updatedItem = updatedFacilities.find(f => f.id === item.id);
-              return updatedItem ? { ...item, isAvailableForDates: updatedItem.isAvailableForDates } : item;
-          }));
 
-          setSelectedExtras(prev => {
-            const newSelected = { ...prev };
-            let itemsRemoved = false;
-            for (const id in newSelected) {
-              const updatedItem = updatedFacilities.find(f => f.id === id);
-              if (updatedItem && updatedItem.isAvailableForDates === false) { delete newSelected[id]; itemsRemoved = true; }
+          setExtraItems((prevItems) =>
+            updateExtraItemsAvailability(prevItems, updatedFacilities),
+          );
+
+          setSelectedExtras((prev) => {
+            const { newSelected, itemsRemoved } = filterAvailableSelectedExtras(
+              prev,
+              updatedFacilities,
+            );
+            if (itemsRemoved) {
+              toast.warn(
+                "Some selected items were removed because they are not available for these dates.",
+              );
             }
-            if (itemsRemoved) toast.warn("Some selected items were removed because they are not available for these dates.");
             return newSelected;
           });
-        } catch (error) { console.error("Failed to check live availability", error); }
-      } else { setExtraItems(prevItems => prevItems.map(item => ({ ...item, isAvailableForDates: true }))); }
+        } catch (error) {
+          console.error("Failed to check live availability", error);
+        }
+      } else {
+        setExtraItems(resetExtraItemsAvailability);
+      }
     };
-    const timeoutId = setTimeout(() => { checkItemAvailability(); }, 500);
+
+    const timeoutId = setTimeout(() => {
+      checkItemAvailability();
+    }, 500);
+
     return () => clearTimeout(timeoutId);
   }, [formData.startTime, formData.endTime]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    setAvailability(null); setPartialAvailability(null);
+    setAvailability(null);
+    setPartialAvailability(null);
   };
 
   const handleCheckboxChange = (id, isChecked) => {
-    setSelectedExtras(prev => {
+    setSelectedExtras((prev) => {
       if (isChecked) return { ...prev, [id]: 1 };
-      const { [id]: _, ...rest } = prev; return rest;
+      const updated = { ...prev };
+      delete updated[id];
+      return updated;
     });
-    setAvailability(null); setPartialAvailability(null);
-  };
-
-const handleQuantityChange = (id, delta, maxInventory = 1) => {
-    setSelectedExtras(prev => {
-      const current = prev[id] || 1; 
-      // Math.min ensures it never goes above maxInventory
-      // Math.max ensures it never goes below 1
-      const next = Math.min(Math.max(1, current + delta), maxInventory); 
-      return { ...prev, [id]: next };
-    });
-    setAvailability(null); 
+    setAvailability(null);
     setPartialAvailability(null);
   };
-  
-  const safeSetStartDate = (val) => { setStartDate(val); setSelectedSlot(null); setAvailability(null); setPartialAvailability(null); };
-  const safeSetEndDate = (val) => { setEndDate(val); setAvailability(null); setPartialAvailability(null); };
-  const safeSetBookingOption = (val) => { setBookingOption(val); setAvailability(null); setPartialAvailability(null); };
+
+  const handleQuantityChange = (id, delta, maxInventory = 1) => {
+    setSelectedExtras((prev) => {
+      const current = prev[id] || 1;
+      const next = Math.min(Math.max(1, current + delta), maxInventory);
+      return { ...prev, [id]: next };
+    });
+    setAvailability(null);
+    setPartialAvailability(null);
+  };
+
+  const safeSetStartDate = (val) => {
+    setStartDate(val);
+    setSelectedSlot(null);
+    setAvailability(null);
+    setPartialAvailability(null);
+  };
+
+  const safeSetEndDate = (val) => {
+    setEndDate(val);
+    setAvailability(null);
+    setPartialAvailability(null);
+  };
+
+  const safeSetBookingOption = (val) => {
+    setBookingOption(val);
+    setAvailability(null);
+    setPartialAvailability(null);
+  };
 
   const buildPayload = (isBookingPartial = false) => {
-    const userSelectedCustoms = Object.entries(selectedExtras).map(([id, quantity]) => ({ facilityId: id, quantity }));
-    if (isCustomMode) return { ...formData, customFacilities: userSelectedCustoms };
+    const userSelectedCustoms = Object.entries(selectedExtras).map(
+      ([id, quantity]) => ({ facilityId: id, quantity }),
+    );
+
+    if (isCustomMode)
+      return { ...formData, customFacilities: userSelectedCustoms };
+
     if (isBookingPartial && partialAvailability) {
-      const remainingCustoms = partialAvailability.availableAlternatives.map(alt => ({ facilityId: alt.facilityId, quantity: alt.quantity || 1 }));
-      return { ...formData, customFacilities: [...remainingCustoms, ...userSelectedCustoms] };
+      const remainingCustoms = partialAvailability.availableAlternatives.map(
+        (alt) => ({ facilityId: alt.facilityId, quantity: alt.quantity || 1 }),
+      );
+
+      return {
+        ...formData,
+        customFacilities: [...remainingCustoms, ...userSelectedCustoms],
+      };
     }
     return { facilityId, ...formData, customFacilities: userSelectedCustoms };
   };
 
   const handleCheckAvailability = async () => {
-    if (!formData.startTime || !formData.endTime) return toast.warn('Please complete the date and time selection.');
-    if (isCustomMode && Object.keys(selectedExtras).length === 0) return toast.warn('Please select at least one item.');
-    
-    setIsChecking(true); setPartialAvailability(null);
+    if (!formData.startTime || !formData.endTime)
+      return toast.warn("Please complete the date and time selection.");
+
+    if (isCustomMode && Object.keys(selectedExtras).length === 0)
+      return toast.warn("Please select at least one item.");
+
+    setIsChecking(true);
+    setPartialAvailability(null);
+
     try {
-      const response = await api.post('/bookings/check-availability', buildPayload(false));
+      const response = await api.post(
+        "/bookings/check-availability",
+        buildPayload(false),
+      );
       const data = response.data.data;
-      if (data.isAvailable) { setAvailability(data); toast.success('Dates are available!'); } 
-      else if (data.isPartiallyAvailable) { setPartialAvailability(data); toast.warn('Package is partially booked.'); } 
-      else { setAvailability(data); toast.error(data.message || 'Dates are currently fully booked.'); }
-    } catch (error) { toast.error(error.response?.data?.message || 'Error checking availability'); } 
-    finally { setIsChecking(false); }
+
+      if (data.isAvailable) {
+        setAvailability(data);
+        toast.success("Dates are available!");
+      } else if (data.isPartiallyAvailable) {
+        setPartialAvailability(data);
+        toast.warn("Package is partially booked.");
+      } else {
+        setAvailability(data);
+        toast.error(data.message || "Dates are currently fully booked.");
+      }
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message || "Error checking availability",
+      );
+    } finally {
+      setIsChecking(false);
+    }
   };
 
   const handleBookNow = async (isBookingPartial = false) => {
-    if (!isAuthenticated) { toast.info('Please log in to complete your booking.'); return navigate('/user/login'); }
-    if (isStaff && (!customerData.fullName || !customerData.mobile)) { return toast.warn("Please provide guest's full name and mobile."); }
+    if (!isAuthenticated) {
+      toast.info("Please log in to complete your booking.");
+      return navigate("/user/login");
+    }
+
+    if (isStaff && (!customerData.fullName || !customerData.mobile)) {
+      return toast.warn("Please provide guest's full name and mobile.");
+    }
 
     setIsSubmitting(true);
+
     try {
       let finalPayload = buildPayload(isBookingPartial);
-      let endpoint = isStaff ? '/bookings/on-behalf' : '/bookings';
-      
-      // 🚨 UPDATED: Attach customer data AND hold data if it's a staff booking
+      let endpoint = isStaff ? "/bookings/on-behalf" : "/bookings";
+
       if (isStaff) {
         finalPayload = { ...finalPayload, ...customerData, ...holdData };
       }
 
       const response = await api.post(endpoint, finalPayload);
-      toast.success('Booking requested successfully!');
-      
-      if (response.data?.data?.isNewUser) toast.info(`A new account was created for ${customerData.fullName}. Credentials sent via SMS/Email.`);
+      toast.success("Booking requested successfully!");
 
-      if (role === 'ADMIN') navigate('/admin/dashboard');
-      else if (role === 'CLERK') navigate('/clerk/dashboard');
-      else navigate('/my-bookings'); 
+      if (response.data?.data?.isNewUser)
+        toast.info(
+          `A new account was created for ${customerData.fullName}. Credentials sent via SMS/Email.`,
+        );
 
-    } catch (error) { toast.error(error.response?.data?.message || 'Failed to submit booking'); } 
-    finally { setIsSubmitting(false); }
+      if (role === "ADMIN") navigate("/admin/dashboard");
+      else if (role === "CLERK") navigate("/clerk/dashboard");
+      else navigate("/my-bookings");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to submit booking");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  if (loading || !facility) return <div className="p-20 text-center text-xl text-gray-500">Loading facility data...</div>;
+  if (loading || !facility)
+    return (
+      <div className="p-20 text-center text-xl text-gray-500">
+        Loading facility data...
+      </div>
+    );
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row gap-12">
       <div className="md:w-2/3">
-        
         {/* IMAGE GALLERY */}
-        {!isCustomMode && Array.isArray(facility.images) && facility.images.length > 0 && (
-          <div className="mb-6">
-            <div className="rounded-2xl overflow-hidden shadow-md h-64 sm:h-96 relative group bg-gray-100 mb-3">
-              <img 
-                src={facility.images[currentImageIndex]} 
-                alt={facility.name} 
-                className="w-full h-full object-cover transition-opacity duration-300"
-                onError={(e) => { e.target.style.display = 'none'; }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none"></div>
-              <div className="absolute bottom-4 left-4 text-white">
-                 <span className="bg-blue-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow">
-                   {facility.facilityType}
-                 </span>
+        {!isCustomMode &&
+          Array.isArray(facility.images) &&
+          facility.images.length > 0 && (
+            <div className="mb-6">
+              <div className="rounded-2xl overflow-hidden shadow-md h-64 sm:h-96 relative group bg-gray-100 mb-3">
+                <img
+                  src={facility.images[currentImageIndex]}
+                  alt={facility.name}
+                  className="w-full h-full object-cover transition-opacity duration-300"
+                  onError={(e) => {
+                    e.target.style.display = "none";
+                  }}
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none"></div>
+
+                <div className="absolute bottom-4 left-4 text-white">
+                  <span className="bg-blue-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider shadow">
+                    {facility.facilityType}
+                  </span>
+                </div>
               </div>
+
+              {facility.images.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto pb-2 snap-x hide-scrollbar">
+                  {facility.images.map((img, idx) => (
+                    <button
+                      key={img}
+                      type="button"
+                      onClick={() => setCurrentImageIndex(idx)}
+                      className={`flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden border-2 transition-all snap-start ${
+                        currentImageIndex === idx
+                          ? "border-blue-600 opacity-100 shadow-md"
+                          : "border-transparent opacity-60 hover:opacity-100"
+                      }`}
+                    >
+                      <img
+                        src={img}
+                        alt={`Thumbnail ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                        }}
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
+          )}
 
-            {facility.images.length > 1 && (
-              <div className="flex gap-2 overflow-x-auto pb-2 snap-x hide-scrollbar">
-                {facility.images.map((img, idx) => (
-                  <button 
-                    key={idx}
-                    type="button"
-                    onClick={() => setCurrentImageIndex(idx)}
-                    className={`flex-shrink-0 w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden border-2 transition-all snap-start ${
-                      currentImageIndex === idx 
-                        ? 'border-blue-600 opacity-100 shadow-md' 
-                        : 'border-transparent opacity-60 hover:opacity-100'
-                    }`}
-                  >
-                    <img src={img} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; }}/>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+          {facility.name}
+        </h1>
 
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">{facility.name}</h1>
-        <p className="text-gray-600 leading-relaxed text-lg border-b pb-6 mb-6">{facility.description}</p>
-        
-        {/* 🚨 UPDATED: Passing down holdData to StaffBookingForm */}
+        <p className="text-gray-600 leading-relaxed text-lg border-b pb-6 mb-6">
+          {facility.description}
+        </p>
+
         {isStaff && (
-          <StaffBookingForm 
-            customerData={customerData} 
-            setCustomerData={setCustomerData} 
-            holdData={holdData} 
-            setHoldData={setHoldData} 
+          <StaffBookingForm
+            customerData={customerData}
+            setCustomerData={setCustomerData}
+            holdData={holdData}
+            setHoldData={setHoldData}
           />
         )}
-        
-        <FacilityExtrasList 
-          extraItems={extraItems} 
-          selectedExtras={selectedExtras} 
-          isCustomMode={isCustomMode} 
-          handleCheckboxChange={handleCheckboxChange} 
-          handleQuantityChange={handleQuantityChange} 
+
+        <FacilityExtrasList
+          extraItems={extraItems}
+          selectedExtras={selectedExtras}
+          isCustomMode={isCustomMode}
+          handleCheckboxChange={handleCheckboxChange}
+          handleQuantityChange={handleQuantityChange}
         />
       </div>
 
       <div className="md:w-1/3 relative">
-        <BookingWidget 
-          facility={facility} availability={availability} partialAvailability={partialAvailability} 
-          isCustomMode={isCustomMode} needsEndDate={needsEndDate} hasRoom={hasRoom} isOnlyMiniHall={isOnlyMiniHall}
-          
-          startDate={startDate} setStartDate={safeSetStartDate} 
-          endDate={endDate} setEndDate={safeSetEndDate} 
-
-          startTimeInput={startTimeInput} setStartTimeInput={setStartTimeInput}
-          
-          bookingOption={bookingOption} setBookingOption={safeSetBookingOption}
-          selectedSlot={selectedSlot} setSelectedSlot={setSelectedSlot}
-          
-          formData={formData} handleChange={handleChange} 
-          handleCheckAvailability={handleCheckAvailability} handleBookNow={handleBookNow} 
-          isChecking={isChecking} isSubmitting={isSubmitting} isStaff={isStaff}
+        <BookingWidget
+          facility={facility}
+          availability={availability}
+          partialAvailability={partialAvailability}
+          isCustomMode={isCustomMode}
+          needsEndDate={needsEndDate}
+          hasRoom={hasRoom}
+          isOnlyMiniHall={isOnlyMiniHall}
+          startDate={startDate}
+          setStartDate={safeSetStartDate}
+          endDate={endDate}
+          setEndDate={safeSetEndDate}
+          startTimeInput={startTimeInput}
+          setStartTimeInput={setStartTimeInput}
+          bookingOption={bookingOption}
+          setBookingOption={safeSetBookingOption}
+          selectedSlot={selectedSlot}
+          setSelectedSlot={setSelectedSlot}
+          formData={formData}
+          handleChange={handleChange}
+          handleCheckAvailability={handleCheckAvailability}
+          handleBookNow={handleBookNow}
+          isChecking={isChecking}
+          isSubmitting={isSubmitting}
+          isStaff={isStaff}
         />
       </div>
     </div>

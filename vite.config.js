@@ -18,5 +18,13 @@ export default defineConfig({
       open: true,
       filename: 'stats.html',
     }),
+    
   ],
+    test: {
+    globals: true,
+    environment: 'jsdom',
+    coverage: {
+      reporter: ['text', 'lcov']
+    }
+  }
 })

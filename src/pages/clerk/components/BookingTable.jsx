@@ -1,17 +1,42 @@
-import { Eye, LogIn, Clock, LogOut as LogOutIcon, FileText, CheckCircle, Info, Banknote } from 'lucide-react';
+import React from "react";
+import PropTypes from "prop-types";
+import {
+  Eye,
+  LogIn,
+  LogOut as LogOutIcon,
+  FileText,
+  CheckCircle,
+  Info,
+  Banknote,
+} from "lucide-react";
 
 const formatDate = (dateString) => {
-  if (!dateString) return 'N/A';
-  const options = { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' };
-  return new Date(dateString).toLocaleDateString('en-IN', options);
+  if (!dateString) return "N/A";
+  const options = {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  };
+  return new Date(dateString).toLocaleDateString("en-IN", options);
 };
 
-export default function BookingTable({ bookings, isProcessing, handleVerify, openModal, setViewIdModal, onFetchInvoice }) {
+export default function BookingTable({
+  bookings,
+  isProcessing,
+  handleVerify,
+  openModal,
+  setViewIdModal,
+  onFetchInvoice,
+}) {
   if (bookings.length === 0) {
     return (
       <div className="p-12 text-center text-gray-500 flex flex-col items-center">
         <CheckCircle size={48} className="text-green-400 mb-4" />
-        <p className="text-lg font-medium">No bookings found for this category.</p>
+        <p className="text-lg font-medium">
+          No bookings found for this category.
+        </p>
       </div>
     );
   }
@@ -33,112 +58,161 @@ export default function BookingTable({ bookings, isProcessing, handleVerify, ope
           {bookings.map((booking) => {
             const schedule = booking.schedule || {};
             const financials = booking.financials || {};
-            
+
             const rent = Number(financials.calculatedAmount || 0);
             const deposit = Number(financials.securityDeposit || 0);
-            const advancePaid = Number(financials.holdAmountPaid || financials.advanceAmountRequested || 0);
-            
-            const isCompleted = financials.paymentStatus === 'COMPLETED';
-            const isPartial = financials.paymentStatus === 'PARTIAL';
-            const rentPaid = isCompleted ? rent : (isPartial ? advancePaid : 0);
+            const advancePaid = Number(
+              financials.holdAmountPaid ||
+                financials.advanceAmountRequested ||
+                0,
+            );
+
+            const isCompleted = financials.paymentStatus === "COMPLETED";
+            const isPartial = financials.paymentStatus === "PARTIAL";
+
+            // FIX: Extracted nested ternary operation into an independent statement
+            let rentPaid = 0;
+            if (isCompleted) {
+              rentPaid = rent;
+            } else if (isPartial) {
+              rentPaid = advancePaid;
+            }
 
             const checkInDate = new Date(schedule.startTime);
-const checkOutDate = new Date(schedule.endTime); // 1. Fetch the check-out date/time
-const today = new Date();
-const now = new Date(); // 2. Get the exact current time
-            checkInDate.setHours(0,0,0,0);
-            today.setHours(0,0,0,0);
+            const checkOutDate = new Date(schedule.endTime);
+            const today = new Date();
+            const now = new Date();
+            checkInDate.setHours(0, 0, 0, 0);
+            today.setHours(0, 0, 0, 0);
             const isCheckInDay = today >= checkInDate && now < checkOutDate;
 
-            return(
+            return (
               <tr key={booking.id} className="hover:bg-gray-50 transition">
-               <td className="p-4">
+                <td className="p-4">
                   <div className="flex items-center gap-2">
                     <span className="text-gray-900 font-mono text-xs font-bold bg-gray-100 px-2 py-1 rounded">
                       {booking.id.substring(0, 8).toUpperCase()}
                     </span>
-                    <button onClick={() => openModal('details', booking)} className="text-gray-400 hover:text-blue-600 transition" title="View Full Details">
+                    <button
+                      onClick={() => openModal("details", booking)}
+                      className="text-gray-400 hover:text-blue-600 transition"
+                      title="View Full Details"
+                    >
                       <Info size={18} />
                     </button>
                   </div>
                 </td>
                 <td className="p-4 whitespace-nowrap">
                   <div className="flex flex-col gap-1">
-                    <span className="text-green-700 font-medium">In: {formatDate(schedule.startTime)}</span>
-                    <span className="text-red-700 font-medium">Out: {formatDate(schedule.endTime)}</span>
+                    <span className="text-green-700 font-medium">
+                      In: {formatDate(schedule.startTime)}
+                    </span>
+                    <span className="text-red-700 font-medium">
+                      Out: {formatDate(schedule.endTime)}
+                    </span>
                   </div>
                 </td>
                 <td className="p-4">
-                  <div className="font-semibold text-gray-900">{booking.eventType}</div>
-                  <div className="text-gray-500 text-xs mt-1">{booking.guestCount} Guests</div>
+                  <div className="font-semibold text-gray-900">
+                    {booking.eventType}
+                  </div>
+                  <div className="text-gray-500 text-xs mt-1">
+                    {booking.guestCount} Guests
+                  </div>
                 </td>
                 <td className="p-4">
-                  <div className="font-bold text-gray-900">Rent: ₹{rent.toLocaleString('en-IN')}</div>
+                  <div className="font-bold text-gray-900">
+                    Rent: ₹{rent.toLocaleString("en-IN")}
+                  </div>
                   <div className="text-orange-600 text-[11px] font-semibold mt-0.5 leading-tight">
-                    Deposit: ₹{deposit.toLocaleString('en-IN')} <br/> <span className="italic opacity-80">(Collect at check-in)</span>
+                    Deposit: ₹{deposit.toLocaleString("en-IN")} <br />{" "}
+                    <span className="italic opacity-80">
+                      (Collect at check-in)
+                    </span>
                   </div>
                   <div className="text-green-600 font-bold text-xs mt-1.5 border-t border-gray-200 pt-1">
-                    Rent Paid: ₹{rentPaid.toLocaleString('en-IN')}
+                    Rent Paid: ₹{rentPaid.toLocaleString("en-IN")}
                   </div>
                 </td>
                 <td className="p-4">
                   <span className="px-2 py-1 text-xs font-bold rounded-full block w-max bg-gray-100 text-gray-800">
-                    {booking.status.replace(/_/g, ' ')}
+                    {/* FIX: Replaced regex with replaceAll */}
+                    {booking.status.replaceAll("_", " ")}
                   </span>
                 </td>
-                
+
                 {/* ACTION COLUMN */}
                 <td className="p-4">
                   <div className="flex flex-col gap-2">
-                    
                     <div className="flex flex-col gap-2">
-                      {booking.status === 'PENDING_CLERK_REVIEW' && (
-                        <button onClick={() => handleVerify(booking.id)} disabled={isProcessing === booking.id} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs transition">Verify</button>
+                      {booking.status === "PENDING_CLERK_REVIEW" && (
+                        <button
+                          onClick={() => handleVerify(booking.id)}
+                          disabled={isProcessing === booking.id}
+                          className="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded text-xs transition"
+                        >
+                          Verify
+                        </button>
                       )}
-                      
-                      {/* 🚨 RECORD DESK PAYMENT 🚨 */}
-                      {(['PENDING_PAYMENT', 'PENDING_ADVANCE_PAYMENT', 'AWAITING_CASH_PAYMENT'].includes(booking.status)) && (
-                        <button 
-                          onClick={() => openModal('recordAdvance', booking)} 
+
+                      {[
+                        "PENDING_PAYMENT",
+                        "PENDING_ADVANCE_PAYMENT",
+                        "AWAITING_CASH_PAYMENT",
+                      ].includes(booking.status) && (
+                        <button
+                          onClick={() => openModal("recordAdvance", booking)}
                           className="bg-teal-600 hover:bg-teal-700 text-white px-3 py-2 rounded text-xs transition shadow-sm font-bold flex items-center justify-center gap-1 w-full"
                         >
                           <Banknote size={14} /> Record Desk Payment
                         </button>
                       )}
 
-                      {/* 🚨 FIX: COLLECT REMAINING RENT (Moved outside CONFIRMED block) 🚨 */}
-                      {booking.status === 'ON_HOLD' && financials.paymentStatus === 'PARTIAL' && (
-                        <button 
-                          onClick={() => openModal('recordRemaining', booking)} 
-                          className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 font-bold px-3 py-2 rounded text-xs transition border border-yellow-300 w-full text-center flex items-center justify-center gap-1"
+                      {booking.status === "ON_HOLD" &&
+                        financials.paymentStatus === "PARTIAL" && (
+                          <button
+                            onClick={() =>
+                              openModal("recordRemaining", booking)
+                            }
+                            className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 font-bold px-3 py-2 rounded text-xs transition border border-yellow-300 w-full text-center flex items-center justify-center gap-1"
+                          >
+                            <Banknote size={14} /> Collect Remaining Rent
+                          </button>
+                        )}
+
+                      {booking.status === "CHECKED_IN" && (
+                        <button
+                          onClick={() => openModal("checkout", booking)}
+                          className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded text-xs flex items-center gap-1 w-full justify-center"
                         >
-                          <Banknote size={14} /> Collect Remaining Rent
+                          <LogOutIcon size={14} /> Check-Out
                         </button>
                       )}
-                      
-                      {booking.status === 'CHECKED_IN' && (
-                        <button onClick={() => openModal('checkout', booking)} className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 rounded text-xs flex items-center gap-1 w-full justify-center"><LogOutIcon size={14}/> Check-Out</button>
-                      )}
-                      
-                      {booking.status === 'CHECKED_OUT' && (
-                        <button onClick={() => onFetchInvoice(booking)} className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs flex items-center gap-1 w-full justify-center"><FileText size={14}/> View Bill</button>
+
+                      {booking.status === "CHECKED_OUT" && (
+                        <button
+                          onClick={() => onFetchInvoice(booking)}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs flex items-center gap-1 w-full justify-center"
+                        >
+                          <FileText size={14} /> View Bill
+                        </button>
                       )}
                     </div>
 
                     {/* --- CONFIRMED BOOKING ACTIONS (Check-in Only) --- */}
-                    {booking.status === 'CONFIRMED' && (
+                    {booking.status === "CONFIRMED" && (
                       <div className="flex flex-col gap-2 border-t pt-2 mt-1 border-gray-100">
-                        {/* Check-In */}
                         {isCheckInDay ? (
-                          <button 
-                            onClick={() => openModal('checkin', booking)} 
+                          <button
+                            onClick={() => openModal("checkin", booking)}
                             className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded text-xs flex items-center justify-center gap-1 shadow-sm transition w-full"
                           >
-                            <LogIn size={14}/> Check-In Guest
+                            <LogIn size={14} /> Check-In Guest
                           </button>
                         ) : (
                           <span className="text-xs text-gray-500 font-semibold italic bg-gray-50 px-2 py-1.5 rounded border text-center w-full block">
-                            Check-in unlocks on {new Date(schedule.startTime).toLocaleDateString()}
+                            Check-in unlocks on{" "}
+                            {new Date(schedule.startTime).toLocaleDateString()}
                           </span>
                         )}
                       </div>
@@ -147,16 +221,24 @@ const now = new Date(); // 2. Get the exact current time
                     {/* KYC VIEW BUTTONS */}
                     {booking.verification?.aadharFrontImageUrl && (
                       <div className="flex flex-wrap gap-2 mt-1 pt-2 border-t border-gray-100">
-                        <button 
-                          onClick={() => setViewIdModal(booking.verification.aadharFrontImageUrl)}
+                        <button
+                          onClick={() =>
+                            setViewIdModal(
+                              booking.verification.aadharFrontImageUrl,
+                            )
+                          }
                           className="flex-1 text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-2 py-1.5 rounded border border-blue-200 flex items-center justify-center gap-1 transition"
                         >
                           <Eye size={12} /> Front ID
                         </button>
-                        
+
                         {booking.verification?.aadharBackImageUrl && (
-                          <button 
-                            onClick={() => setViewIdModal(booking.verification.aadharBackImageUrl)}
+                          <button
+                            onClick={() =>
+                              setViewIdModal(
+                                booking.verification.aadharBackImageUrl,
+                              )
+                            }
                             className="flex-1 text-[11px] bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold px-2 py-1.5 rounded border border-blue-200 flex items-center justify-center gap-1 transition"
                           >
                             <Eye size={12} /> Back ID
@@ -164,14 +246,61 @@ const now = new Date(); // 2. Get the exact current time
                         )}
                       </div>
                     )}
-
                   </div>
                 </td>
               </tr>
-            )
+            );
           })}
         </tbody>
       </table>
     </div>
   );
 }
+
+// FIX: Added prop types to satisfy SonarQube validation requirements
+BookingTable.propTypes = {
+  bookings: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
+      schedule: PropTypes.shape({
+        startTime: PropTypes.string,
+        endTime: PropTypes.string,
+      }),
+      financials: PropTypes.shape({
+        calculatedAmount: PropTypes.oneOfType([
+          PropTypes.string,
+          PropTypes.number,
+        ]),
+        securityDeposit: PropTypes.oneOfType([
+          PropTypes.string,
+          PropTypes.number,
+        ]),
+        holdAmountPaid: PropTypes.oneOfType([
+          PropTypes.string,
+          PropTypes.number,
+        ]),
+        advanceAmountRequested: PropTypes.oneOfType([
+          PropTypes.string,
+          PropTypes.number,
+        ]),
+        paymentStatus: PropTypes.string,
+      }),
+      eventType: PropTypes.string,
+      guestCount: PropTypes.number,
+      status: PropTypes.string,
+      verification: PropTypes.shape({
+        aadharFrontImageUrl: PropTypes.string,
+        aadharBackImageUrl: PropTypes.string,
+      }),
+    }),
+  ).isRequired,
+  isProcessing: PropTypes.oneOfType([
+    PropTypes.string,
+    PropTypes.number,
+    PropTypes.bool,
+  ]),
+  handleVerify: PropTypes.func.isRequired,
+  openModal: PropTypes.func.isRequired,
+  setViewIdModal: PropTypes.func.isRequired,
+  onFetchInvoice: PropTypes.func.isRequired,
+};

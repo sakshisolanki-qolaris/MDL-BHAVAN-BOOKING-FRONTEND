@@ -1,19 +1,33 @@
-import { Navigate, Outlet } from 'react-router-dom';
-import useAuthStore from '../store/useAuthStore';
+import { Navigate, Outlet } from "react-router-dom";
+import PropTypes from "prop-types";
+import useAuthStore from "../store/useAuthStore";
 
 export default function ProtectedRoute({ allowedRoles }) {
-  const { isAuthenticated, role } = useAuthStore();
+  const { isAuthenticated, role, logout } = useAuthStore();
 
-  // 1. If they aren't logged in at all, kick them to the default login
+  const getTargetLoginRoute = () => {
+    if (allowedRoles?.length === 1) {
+      if (allowedRoles.includes("ADMIN")) return "/admin/login";
+      if (allowedRoles.includes("CLERK")) return "/clerk/login";
+    }
+    return "/user/login";
+  };
+
   if (!isAuthenticated) {
+    return <Navigate to={getTargetLoginRoute()} replace />;
+  }
+
+  if (allowedRoles && !allowedRoles.includes(role)) {
+    logout();
+
+    if (role === "ADMIN") return <Navigate to="/admin/login" replace />;
+    if (role === "CLERK") return <Navigate to="/clerk/login" replace />;
     return <Navigate to="/user/login" replace />;
   }
 
-  // 2. If they are logged in but don't have the right role, send them to an unauthorized page
-  if (allowedRoles && !allowedRoles.includes(role)) {
-    return <Navigate to="/unauthorized" replace />;
-  }
-
-  // 3. If they pass all checks, render the child components!
   return <Outlet />;
 }
+
+ProtectedRoute.propTypes = {
+  allowedRoles: PropTypes.arrayOf(PropTypes.string),
+};

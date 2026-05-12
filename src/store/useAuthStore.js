@@ -1,7 +1,6 @@
-// src/store/useAuthStore.js
-import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { authService } from '../api/auth.service'; 
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+import { authService } from "../api/auth.service";
 
 const useAuthStore = create(
   persist(
@@ -11,23 +10,27 @@ const useAuthStore = create(
       isAuthenticated: false,
       isCheckingAuth: false,
 
-      login: (userData) => set({
-        user: userData,
-        role: userData.role,
-        isAuthenticated: true,
-      }),
+      login: (userData) =>
+        set({
+          user: userData,
+          role: userData.role,
+          isAuthenticated: true,
+        }),
 
-      logout: () => set({
-        user: null,
-        role: null,
-        isAuthenticated: false,
-      }),
+      logout: () =>
+        set({
+          user: null,
+          role: null,
+          isAuthenticated: false,
+        }),
 
       checkAuth: async () => {
         set({ isCheckingAuth: true });
+
         try {
           const response = await authService.getMyProfile();
-          const userData = response.data.data.user; 
+          const userData = response.data.data.user;
+
           set({
             user: userData,
             role: userData.role,
@@ -35,6 +38,8 @@ const useAuthStore = create(
             isCheckingAuth: false,
           });
         } catch (error) {
+          console.error("Failed to check authentication status:", error);
+
           set({
             user: null,
             role: null,
@@ -42,12 +47,12 @@ const useAuthStore = create(
             isCheckingAuth: false,
           });
         }
-      }
+      },
     }),
-    { 
-      name: 'bhavan-auth-storage' 
-    }
-  )
+    {
+      name: "bhavan-auth-storage",
+    },
+  ),
 );
 
 export default useAuthStore;

@@ -1,5 +1,7 @@
-import React from 'react';
-import { Calendar, Users, Clock } from 'lucide-react';
+import React from "react";
+import PropTypes from "prop-types";
+import { Calendar, Users, Clock } from "lucide-react";
+import { toast } from "react-toastify";
 
 export default function BookingWidget({
   facility,
@@ -13,10 +15,8 @@ export default function BookingWidget({
   setStartDate,
   endDate,
   setEndDate,
-  // NEW PROPS FOR TIME SELECTION
   startTimeInput,
   setStartTimeInput,
-  
   bookingOption,
   setBookingOption,
   selectedSlot,
@@ -27,64 +27,75 @@ export default function BookingWidget({
   handleBookNow,
   isChecking,
   isSubmitting,
-  isStaff
+  isStaff,
 }) {
-
-  // Safety checks
-  const isTiered = facility?.pricingType === 'TIERED';
-  const isSlot = facility?.pricingType === 'SLOT';
+  const isTiered = facility?.pricingType === "TIERED";
+  const isSlot = facility?.pricingType === "SLOT";
   const slotType = facility?.pricingDetails?.slotType;
   const slots = facility?.pricingDetails?.slots || [];
+
+  const getSubmitButtonText = () => {
+    if (isSubmitting) return "Processing...";
+    return isStaff ? "Confirm & Book (Staff)" : "Proceed to Book";
+  };
 
   return (
     <div className="bg-white rounded-2xl shadow-xl border p-6 sticky top-24">
       <h2 className="text-xl font-bold text-gray-900 mb-4 pb-2 border-b">
-        {isCustomMode ? 'Check Custom Availability' : 'Book this Space'}
+        {isCustomMode ? "Check Custom Availability" : "Book this Space"}
       </h2>
 
       <div className="space-y-5">
-        
-        {/* === CALENDAR DATE SELECTION === */}
         <div>
-          <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2">
-            <Calendar size={16} className="text-blue-600"/> 
-            {needsEndDate ? 'Check-in Date' : 'Event Date'}
+          <label
+            htmlFor="startDateInput"
+            className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2"
+          >
+            <Calendar size={16} className="text-blue-600" />
+            {needsEndDate ? "Check-in Date" : "Event Date"}
           </label>
-          <input 
-            type="date" 
-            min={new Date().toISOString().split('T')[0]}
-            value={startDate} 
-            onChange={(e) => setStartDate(e.target.value)} 
-            className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 bg-gray-50" 
+          <input
+            id="startDateInput"
+            type="date"
+            min={new Date().toISOString().split("T")[0]}
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 bg-gray-50"
           />
         </div>
 
-        {/* === MULTI-DAY / HOURLY END DATE === */}
         {needsEndDate && (
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2">
-              <Calendar size={16} className="text-orange-500"/> Check-out Date
+            <label
+              htmlFor="endDateInput"
+              className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2"
+            >
+              <Calendar size={16} className="text-orange-500" /> Check-out Date
             </label>
-            <input 
-              type="date" 
-              min={startDate || new Date().toISOString().split('T')[0]}
-              value={endDate} 
-              onChange={(e) => setEndDate(e.target.value)} 
-              className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 bg-gray-50" 
+            <input
+              id="endDateInput"
+              type="date"
+              min={startDate || new Date().toISOString().split("T")[0]}
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 bg-gray-50"
               disabled={!startDate}
             />
           </div>
         )}
 
-        {/* === TIERED PRICING (e.g. 1 Day, 2 Days) === */}
         {!isCustomMode && isTiered && (
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2">
-              <Clock size={16} className="text-purple-600"/> Duration
+            <label
+              htmlFor="bookingOptionSelect"
+              className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2"
+            >
+              <Clock size={16} className="text-purple-600" /> Duration
             </label>
-            <select 
-              value={bookingOption} 
-              onChange={(e) => setBookingOption(e.target.value)} 
+            <select
+              id="bookingOptionSelect"
+              value={bookingOption}
+              onChange={(e) => setBookingOption(e.target.value)}
               className="w-full border p-3 rounded-xl bg-gray-50 focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Select Duration...</option>
@@ -95,18 +106,21 @@ export default function BookingWidget({
           </div>
         )}
 
-        {/* === DYNAMIC SLOT BUILDER === */}
         {!isCustomMode && isSlot && startDate && (
           <div className="mt-4 p-4 bg-blue-50/50 rounded-xl border border-blue-100">
             <label className="block text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
-              <Clock size={16} className="text-blue-600"/> 
-              {slotType === 'FIXED' ? 'Select Available Shift' : 'Flexible Duration'}
+              <Clock size={16} className="text-blue-600" />
+              {slotType === "FIXED"
+                ? "Select Available Shift"
+                : "Flexible Duration"}
             </label>
 
-            {slotType === 'FIXED' ? (
+            {slotType === "FIXED" ? (
               <div className="grid grid-cols-1 gap-3">
                 {slots.length === 0 ? (
-                  <p className="text-sm text-gray-500 italic">No shifts configured by admin.</p>
+                  <p className="text-sm text-gray-500 italic">
+                    No shifts configured by admin.
+                  </p>
                 ) : (
                   slots.map((slot) => (
                     <button
@@ -114,55 +128,74 @@ export default function BookingWidget({
                       type="button"
                       onClick={() => setSelectedSlot(slot)}
                       className={`text-left p-3 rounded-xl border-2 transition-all ${
-                        selectedSlot?.id === slot.id 
-                          ? 'border-blue-600 bg-blue-100/50 shadow-sm' 
-                          : 'border-gray-200 bg-white hover:border-blue-300'
+                        selectedSlot?.id === slot.id
+                          ? "border-blue-600 bg-blue-100/50 shadow-sm"
+                          : "border-gray-200 bg-white hover:border-blue-300"
                       }`}
                     >
-                      <span className="block font-bold text-gray-900">{slot.label}</span>
+                      <span className="block font-bold text-gray-900">
+                        {slot.label}
+                      </span>
                       <span className="block text-xs text-gray-600 mt-0.5">
                         {slot.startTime} to {slot.endTime}
                       </span>
                       <span className="block font-extrabold text-green-700 mt-1">
-                        ₹{Number(slot.price).toLocaleString('en-IN')}
+                        ₹{Number(slot.price).toLocaleString("en-IN")}
                       </span>
                     </button>
                   ))
                 )}
               </div>
             ) : (
-             <div className="bg-white p-4 rounded-xl border-2 border-blue-200">
+              <div className="bg-white p-4 rounded-xl border-2 border-blue-200">
                 <span className="block text-sm font-medium text-gray-600">
-                  Required Duration: <span className="font-bold text-gray-900">{facility.pricingDetails?.durationHours} Hours</span>
+                  Required Duration:{" "}
+                  <span className="font-bold text-gray-900">
+                    {facility.pricingDetails?.durationHours} Hours
+                  </span>
                 </span>
-                
-                {/* 🚨 UPDATED: Time Picker for Flexible Slots with 8 AM to 5 PM Restriction 🚨 */}
+
                 <div className="mt-4">
-                   <label className="block text-xs font-bold text-gray-700 mb-1">Select Start Time (Between 08:00 AM - 05:00 PM)</label>
-                   <input 
-                     type="time" 
-                     min="08:00"
-                     max="17:00"
-                     value={startTimeInput} 
-                     onChange={(e) => {
-                       const time = e.target.value;
-                       if (time) {
-                         const [hours, minutes] = time.split(':').map(Number);
-                         // Prevent selection before 8 AM (08:00) or strictly after 5 PM (17:00)
-                         if (hours < 8 || hours > 17 || (hours === 17 && minutes > 0)) {
-                           toast.warn("Start time must be between 08:00 AM and 05:00 PM.");
-                           return; // Reject the input
-                         }
-                       }
-                       setStartTimeInput(time);
-                     }} 
-                     className="w-full border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 bg-gray-50"
-                   />
+                  {/* FIX: Added htmlFor and id to link label and control */}
+                  <label
+                    htmlFor="startTimeInput"
+                    className="block text-xs font-bold text-gray-700 mb-1"
+                  >
+                    Select Start Time (Between 08:00 AM - 05:00 PM)
+                  </label>
+                  <input
+                    id="startTimeInput"
+                    type="time"
+                    min="08:00"
+                    max="17:00"
+                    value={startTimeInput}
+                    onChange={(e) => {
+                      const time = e.target.value;
+                      if (time) {
+                        const [hours, minutes] = time.split(":").map(Number);
+
+                        if (
+                          hours < 8 ||
+                          hours > 17 ||
+                          (hours === 17 && minutes > 0)
+                        ) {
+                          toast.warn(
+                            "Start time must be between 08:00 AM and 05:00 PM.",
+                          );
+                          return;
+                        }
+                      }
+                      setStartTimeInput(time);
+                    }}
+                    className="w-full border p-2 rounded-lg focus:ring-2 focus:ring-blue-500 bg-gray-50"
+                  />
                 </div>
-                
+
                 {startTimeInput && (
                   <p className="text-xs text-green-700 mt-3 font-semibold bg-green-50 p-2 rounded">
-                    Check-out will be automatically calculated as {facility.pricingDetails?.durationHours} hours from {startTimeInput}.
+                    Check-out will be automatically calculated as{" "}
+                    {facility.pricingDetails?.durationHours} hours from{" "}
+                    {startTimeInput}.
                   </p>
                 )}
               </div>
@@ -172,88 +205,128 @@ export default function BookingWidget({
 
         {/* === GUEST COUNT === */}
         <div>
-          <label className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2">
-            <Users size={16} className="text-green-600"/> Expected Guests
+          {/* FIX: Added htmlFor and id to link label and control */}
+          <label
+            htmlFor="guestCountInput"
+            className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2"
+          >
+            <Users size={16} className="text-green-600" /> Expected Guests
           </label>
-          <input 
-            type="number" min="1" max={facility?.capacity || 2000} 
-            name="guestCount" value={formData.guestCount} onChange={handleChange} 
-            className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 bg-gray-50" 
+          <input
+            id="guestCountInput"
+            type="number"
+            min="1"
+            max={facility?.capacity || 2000}
+            name="guestCount"
+            value={formData.guestCount}
+            onChange={handleChange}
+            className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 bg-gray-50"
           />
         </div>
       </div>
 
-      {/* === AVAILABILITY & BOOKING BUTTONS === */}
       <div className="mt-8 space-y-3">
-        {(!availability || !availability.isAvailable) && !partialAvailability && (
-          <button 
-            onClick={handleCheckAvailability} 
+        {/* FIX: Used optional chaining */}
+        {!availability?.isAvailable && !partialAvailability && (
+          <button
+            onClick={handleCheckAvailability}
             disabled={
-              isChecking || 
-              !startDate || 
-              (needsEndDate && !endDate) || 
-              (isSlot && slotType === 'FIXED' && !selectedSlot) ||
-              (isSlot && slotType === 'FLEXIBLE' && !startTimeInput) // 🚨 NEW: Disable if time not picked
-            } 
+              isChecking ||
+              !startDate ||
+              (needsEndDate && !endDate) ||
+              (isSlot && slotType === "FIXED" && !selectedSlot) ||
+              (isSlot && slotType === "FLEXIBLE" && !startTimeInput)
+            }
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition shadow-md disabled:opacity-50"
           >
-            {isChecking ? 'Checking System...' : 'Check Availability'}
+            {isChecking ? "Checking System..." : "Check Availability"}
           </button>
         )}
 
-        {availability && availability.isAvailable && (
+        {/* FIX: Used optional chaining */}
+        {availability?.isAvailable && (
           <div className="animate-fade-in">
-            {/* 🚨 CHANGED: Updated UI to clearly separate Rent vs Security Deposit */}
             <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4 space-y-2">
               <div className="flex justify-between items-center text-gray-800">
-                <span className="font-semibold text-sm">Amount Due Now (Rent):</span>
-                <span className="font-bold">₹{availability.pricing?.baseCalculatedAmount?.toLocaleString('en-IN') || 0}</span>
+                <span className="font-semibold text-sm">
+                  Amount Due Now (Rent):
+                </span>
+                <span className="font-bold">
+                  ₹
+                  {availability.pricing?.baseCalculatedAmount?.toLocaleString(
+                    "en-IN",
+                  ) || 0}
+                </span>
               </div>
               <div className="flex justify-between items-center text-orange-700">
-                <span className="font-semibold text-sm">Security Deposit (Pay at Check-in):</span>
-                <span className="font-bold">₹{availability.pricing?.securityDepositRequired?.toLocaleString('en-IN') || 0}</span>
+                <span className="font-semibold text-sm">
+                  Security Deposit (Pay at Check-in):
+                </span>
+                <span className="font-bold">
+                  ₹
+                  {availability.pricing?.securityDepositRequired?.toLocaleString(
+                    "en-IN",
+                  ) || 0}
+                </span>
               </div>
               <div className="border-t border-green-200 pt-2 mt-2">
                 <p className="text-green-900 font-extrabold flex justify-between items-center">
                   <span>Estimated Total:</span>
-                  <span className="text-xl">₹{availability.pricing?.estimatedTotal?.toLocaleString('en-IN') || 0}</span>
+                  <span className="text-xl">
+                    ₹
+                    {availability.pricing?.estimatedTotal?.toLocaleString(
+                      "en-IN",
+                    ) || 0}
+                  </span>
                 </p>
               </div>
             </div>
-            
-            <button 
-              onClick={() => handleBookNow(false)} 
-              disabled={isSubmitting} 
+
+            <button
+              onClick={() => handleBookNow(false)}
+              disabled={isSubmitting}
               className="w-full bg-green-600 hover:bg-green-700 text-white font-extrabold text-lg py-4 rounded-xl transition shadow-lg disabled:opacity-50"
             >
-              {isSubmitting ? 'Processing...' : isStaff ? 'Confirm & Book (Staff)' : 'Proceed to Book'}
+              {getSubmitButtonText()}
             </button>
           </div>
         )}
 
         {partialAvailability && (
           <div className="animate-fade-in border-2 border-orange-300 bg-orange-50 rounded-xl p-4 mt-4">
-            <h3 className="font-bold text-orange-800 mb-2">⚠️ Partial Availability</h3>
-            <p className="text-sm text-orange-700 mb-3">Some selected items are booked. We can offer this alternative package:</p>
+            <h3 className="font-bold text-orange-800 mb-2">
+              ⚠️ Partial Availability
+            </h3>
+            <p className="text-sm text-orange-700 mb-3">
+              Some selected items are booked. We can offer this alternative
+              package:
+            </p>
             <ul className="text-sm space-y-1 mb-4 font-medium text-gray-700 bg-white p-3 rounded border">
-               {partialAvailability.availableAlternatives?.map((alt, idx) => (
-                 <li key={idx} className="flex justify-between border-b pb-1 last:border-0 last:pb-0">
-                   <span>{alt.name}</span> <span className="text-green-600">₹{alt.baseRate}</span>
-                 </li>
-               ))}
+              {partialAvailability.availableAlternatives?.map((alt) => (
+                <li
+                  key={alt.name}
+                  className="flex justify-between border-b pb-1 last:border-0 last:pb-0"
+                >
+                  <span>{alt.name}</span>{" "}
+                  <span className="text-green-600">₹{alt.baseRate}</span>
+                </li>
+              ))}
             </ul>
             <p className="text-orange-900 font-bold flex justify-between items-end mb-4">
-              <span>New Total (Base):</span> 
+              <span>New Total (Base):</span>
               <span className="text-xl">
-                ₹{partialAvailability.availableAlternatives?.reduce((sum, alt) => sum + Number(alt.baseRate), 0).toLocaleString('en-IN')}
+                ₹
+                {partialAvailability.availableAlternatives
+                  ?.reduce((sum, alt) => sum + Number(alt.baseRate), 0)
+                  .toLocaleString("en-IN")}
               </span>
             </p>
-            <button 
-              onClick={() => handleBookNow(true)} 
-              disabled={isSubmitting} 
+            <button
+              onClick={() => handleBookNow(true)}
+              disabled={isSubmitting}
               className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-lg transition shadow disabled:opacity-50"
             >
-              {isSubmitting ? 'Processing...' : 'Accept Partial & Book'}
+              {isSubmitting ? "Processing..." : "Accept Partial & Book"}
             </button>
           </div>
         )}
@@ -261,3 +334,70 @@ export default function BookingWidget({
     </div>
   );
 }
+
+BookingWidget.propTypes = {
+  facility: PropTypes.shape({
+    pricingType: PropTypes.string,
+    capacity: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    pricingDetails: PropTypes.shape({
+      slotType: PropTypes.string,
+      slots: PropTypes.arrayOf(
+        PropTypes.shape({
+          id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+          label: PropTypes.string,
+          startTime: PropTypes.string,
+          endTime: PropTypes.string,
+          price: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        }),
+      ),
+      durationHours: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    }),
+  }),
+  availability: PropTypes.shape({
+    isAvailable: PropTypes.bool,
+    pricing: PropTypes.shape({
+      baseCalculatedAmount: PropTypes.oneOfType([
+        PropTypes.string,
+        PropTypes.number,
+      ]),
+      securityDepositRequired: PropTypes.oneOfType([
+        PropTypes.string,
+        PropTypes.number,
+      ]),
+      estimatedTotal: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    }),
+  }),
+  partialAvailability: PropTypes.shape({
+    availableAlternatives: PropTypes.arrayOf(
+      PropTypes.shape({
+        name: PropTypes.string,
+        baseRate: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+      }),
+    ),
+  }),
+  isCustomMode: PropTypes.bool.isRequired,
+  needsEndDate: PropTypes.bool,
+  hasRoom: PropTypes.bool,
+  isOnlyMiniHall: PropTypes.bool,
+  startDate: PropTypes.string.isRequired,
+  setStartDate: PropTypes.func.isRequired,
+  endDate: PropTypes.string.isRequired,
+  setEndDate: PropTypes.func.isRequired,
+  startTimeInput: PropTypes.string.isRequired,
+  setStartTimeInput: PropTypes.func.isRequired,
+  bookingOption: PropTypes.string.isRequired,
+  setBookingOption: PropTypes.func.isRequired,
+  selectedSlot: PropTypes.shape({
+    id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  }),
+  setSelectedSlot: PropTypes.func.isRequired,
+  formData: PropTypes.shape({
+    guestCount: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+  }).isRequired,
+  handleChange: PropTypes.func.isRequired,
+  handleCheckAvailability: PropTypes.func.isRequired,
+  handleBookNow: PropTypes.func.isRequired,
+  isChecking: PropTypes.bool.isRequired,
+  isSubmitting: PropTypes.bool.isRequired,
+  isStaff: PropTypes.bool.isRequired,
+};
