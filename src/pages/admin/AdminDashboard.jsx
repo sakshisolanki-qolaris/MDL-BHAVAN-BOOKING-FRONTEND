@@ -302,11 +302,28 @@ export default function AdminDashboard() {
                             </button>
                           )
                         ))}
+{/* View Bill Action for Checked-Out Bookings */}
+                      {booking.status === "CHECKED_OUT" && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              const response = await api.get(`/billing/${booking.id}/invoice`);
+                              setPrintModal({ invoice: response.data.data.invoice, booking });
+                            } catch(err) { 
+                              console.error(err);
+                              toast.error("Invoice not found."); 
+                            }
+                          }}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded text-xs transition flex items-center gap-1 whitespace-nowrap h-fit"
+                        >
+                          <FileText size={14} /> View Bill
+                        </button>
+                      )}
 
                       {/* View Details Action */}
                       <button
                         onClick={() => setViewingDetails(booking)}
-                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1.5 rounded text-xs transition flex items-center gap-1 h-fit"
+                        className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1.5 rounded text-xs transition flex items-center gap-1 whitespace-nowrap h-fit"
                       >
                         <Eye size={14} /> Details
                       </button>

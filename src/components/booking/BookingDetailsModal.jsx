@@ -64,20 +64,14 @@ export default function BookingDetailsModal({ booking, onClose }) {
     Number(booking.financials?.holdAmountPaid || 0) +
     Number(booking.financials?.remainingAmountPaid || 0);
 
-  if (
+  if (["COMPLETED", "REFUNDED"].includes(booking.financials?.paymentStatus)) {
+    actualPaidAmount = base;
+  } 
+  else if (
     actualPaidAmount === 0 &&
-    ["COMPLETED", "PARTIAL", "REFUNDED"].includes(
-      booking.financials?.paymentStatus,
-    )
+    (booking.financials?.paymentStatus === "PARTIAL" || booking.status === "ON_HOLD")
   ) {
-    if (
-      booking.financials?.paymentStatus === "PARTIAL" ||
-      booking.status === "ON_HOLD"
-    ) {
-      actualPaidAmount = advance;
-    } else {
-      actualPaidAmount = base;
-    }
+    actualPaidAmount = advance > 0 ? advance : Number(booking.financials?.paymentRequested || 0);
   }
 
   const renderRefundStatus = () => {
@@ -387,6 +381,10 @@ BookingDetailsModal.propTypes = {
         PropTypes.string,
       ]),
       advanceAmountRequested: PropTypes.oneOfType([
+        PropTypes.number,
+        PropTypes.string,
+      ]),
+      paymentRequested: PropTypes.oneOfType([
         PropTypes.number,
         PropTypes.string,
       ]),

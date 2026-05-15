@@ -147,11 +147,11 @@ export default function UserRegister() {
       </div>
 
       <div className="hidden lg:flex lg:w-1/2 bg-blue-50 relative items-center justify-center overflow-hidden">
-        <img
-          src="https://images.unsplash.com/photo-1517457373958-b7bdd4587205?auto=format&fit=crop&q=80&w=1200"
-          alt="Bhavan Background"
-          className="absolute inset-0 w-full h-full object-cover opacity-90"
-        />
+          <img
+    src="/images/mhmandal.jpeg"
+    alt="Bhavan Background"
+    className="absolute inset-0 w-full h-full object-cover"
+  />
       </div>
     </div>
   );

@@ -37,10 +37,10 @@ export default function UserLogin() {
       <div className="hidden lg:flex lg:w-1/2 bg-blue-900 relative items-center justify-center overflow-hidden">
         <div className="absolute inset-0 bg-blue-900/40 z-10"></div>
         <img
-          src="https://images.unsplash.com/photo-1519167758481-83f550bb49b3?auto=format&fit=crop&q=80&w=1200"
-          alt="Bhavan Background"
-          className="absolute inset-0 w-full h-full object-cover mix-blend-overlay"
-        />
+    src="/images/mhmandal.jpeg"
+    alt="Bhavan Background"
+    className="absolute inset-0 w-full h-full object-cover"
+  />
         <div className="relative z-20 text-center text-white px-12">
           <h1 className="text-5xl font-extrabold tracking-tight mb-4">
             Bhavan<span className="text-orange-400">Book</span>
