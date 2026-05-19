@@ -31,10 +31,13 @@ export const generateAndUploadFrontendPDF = async (invoice, booking) => {
 
     // 1. PRE-FETCH THE SIGNATURE (Now outside the Promise block)
     let safeSignatureData = null;
-    if (invoice?.adminSignatureUrl) {
+    if (invoice?.adminSignatureBase64) {
+      console.log("🔒 Found pre-loaded Base64 signature from backend!");
+      safeSignatureData = invoice.adminSignatureBase64;
+    } else if (invoice?.adminSignatureUrl) {
       safeSignatureData = await fetchImageAsBase64(invoice.adminSignatureUrl);
     } else {
-      console.warn("⚠️ No adminSignatureUrl found in the invoice data!");
+      console.warn("⚠️ No adminSignatureUrl or adminSignatureBase64 found in the invoice data!");
     }
 
     const finalInvoiceData = {

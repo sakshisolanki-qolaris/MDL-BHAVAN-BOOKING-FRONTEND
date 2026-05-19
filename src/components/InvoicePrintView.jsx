@@ -93,7 +93,9 @@ const [signatureDataUrl, setSignatureDataUrl] = useState(null);
 
   // NEW: Fetch the image and convert to Base64 to bypass Canvas security
   useEffect(() => {
-    if (invoice?.adminSignatureUrl) {
+    if (invoice?.adminSignatureBase64) {
+      setSignatureDataUrl(invoice.adminSignatureBase64);
+    } else if (invoice?.adminSignatureUrl) {
       fetch(invoice.adminSignatureUrl)
         .then((res) => res.blob())
         .then((blob) => {
@@ -103,7 +105,7 @@ const [signatureDataUrl, setSignatureDataUrl] = useState(null);
         })
         .catch((err) => console.error("Signature block by CORS:", err));
     }
-  }, [invoice?.adminSignatureUrl]);
+  }, [invoice?.adminSignatureUrl, invoice?.adminSignatureBase64]);
 
   if (!invoice || !booking) return null;
 
