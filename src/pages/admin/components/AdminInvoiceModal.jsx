@@ -2,6 +2,10 @@ import React, { useState } from "react";
 import PropTypes from "prop-types";
 import { X, CheckCircle, Plus, AlertTriangle } from "lucide-react";
 import { toast } from "react-toastify";
+import api from "../../../api/axios";
+
+// IMPORTANT: Ensure this path matches where you saved the utility file!
+import { generateAndUploadFrontendPDF } from "../../../utils/generateUploadPdf";
 
 export default function AdminInvoiceModal({
   modalData,
@@ -14,8 +18,7 @@ export default function AdminInvoiceModal({
   if (!modalData) return null;
   const { booking, invoice } = modalData;
 
-  const handleActionClick = (status) => {
-    // FIX: Always return the same type (undefined) to satisfy SonarQube
+  const handleActionClick = async (status) => {
     if (status === "REJECTED" && !invoiceRemarks.trim()) {
       toast.warn(
         "Remarks are required when rejecting an invoice back to the clerk.",
@@ -23,10 +26,41 @@ export default function AdminInvoiceModal({
       return;
     }
 
-    onAction(invoice.id, {
-      approvalStatus: status,
-      adminRemarks: invoiceRemarks,
-    });
+    try {
+      await onAction(invoice.id, {
+        approvalStatus: status,
+        adminRemarks: invoiceRemarks,
+      });
+
+      if (status === "APPROVED") {
+        try {
+          console.log("🔄 Fetching final approved invoice data...");
+
+          const freshResponse = await api.get(`/billing/${booking.id}/invoice`);
+
+          const officiallyApprovedInvoice =
+            freshResponse?.data?.data?.invoice ||
+            freshResponse?.data?.invoice ||
+            freshResponse?.invoice;
+
+          if (!officiallyApprovedInvoice) {
+            console.error("Unexpected API Response:", freshResponse);
+            throw new Error("Could not find the invoice object in the response.");
+          }
+
+          generateAndUploadFrontendPDF(officiallyApprovedInvoice, booking)
+            .then(() => console.log("✅ Invoice PDF saved to MinIO!"))
+            .catch((err) => console.error("❌ MinIO upload failed", err));
+        } catch (error_) {
+          console.error(
+            "Failed to fetch fresh invoice for PDF generation:",
+            error_,
+          );
+        }
+      }
+    } catch (error) {
+      console.error("Action failed:", error);
+    }
   };
 
   // Calculations
@@ -50,7 +84,6 @@ export default function AdminInvoiceModal({
   const isWalkin = booking?.bookingSource === "WALK_IN";
   const modeLabel = `${invoice.settlementMode || "ONLINE"}${isWalkin ? " (Walk-in)" : ""}`;
 
-  // FIX: Extracted nested ternary operation into an independent rendering function
   const renderSettlementStatus = () => {
     if (refundDue > 0) {
       return (
@@ -284,10 +317,10 @@ export default function AdminInvoiceModal({
   );
 }
 
-// FIX: Added comprehensive prop validation for all accessed properties
 AdminInvoiceModal.propTypes = {
   modalData: PropTypes.shape({
     booking: PropTypes.shape({
+      id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
       bookingSource: PropTypes.string,
     }),
     invoice: PropTypes.shape({

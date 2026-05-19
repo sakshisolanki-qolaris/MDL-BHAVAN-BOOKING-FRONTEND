@@ -27,6 +27,7 @@ export default function FacilityFormModal({
   });
 
   const [pricingDetails, setPricingDetails] = useState({
+    is_atomic: true,
     slotType: "FIXED",
     durationHours: 1,
     slots: [],
@@ -48,12 +49,20 @@ export default function FacilityFormModal({
       });
 
       if (facility.pricingDetails) {
+        let details = facility.pricingDetails;
+        if (typeof details === "string") {
+          try {
+            details = JSON.parse(details);
+          } catch (e) {
+            console.error("Failed to parse pricingDetails:", e);
+          }
+        }
         setPricingDetails({
-          slotType: facility.pricingDetails.slotType || "FIXED",
-          durationHours: facility.pricingDetails.durationHours || 1,
-          slots: facility.pricingDetails.slots || [],
-          included_facilities:
-            facility.pricingDetails.included_facilities || [],
+          is_atomic: details.is_atomic ?? details.isatomic ?? true,
+          slotType: details.slotType || "FIXED",
+          durationHours: details.durationHours || 1,
+          slots: details.slots || [],
+          included_facilities: details.included_facilities || [],
         });
       }
       setImagePreviews(Array.isArray(facility.images) ? facility.images : []);
@@ -100,11 +109,25 @@ export default function FacilityFormModal({
   const handleFacilityIncludeToggle = (isChecked, facName) => {
     setPricingDetails((prev) => {
       const current = prev.included_facilities || [];
-      if (isChecked)
-        return { ...prev, included_facilities: [...current, facName] };
+      if (isChecked) {
+        const exists = current.some((inc) => {
+          const incName =
+            typeof inc === "object" && inc !== null ? inc.name : inc;
+          return incName === facName;
+        });
+        if (exists) return prev;
+        return {
+          ...prev,
+          included_facilities: [...current, { name: facName, quantity: 1 }],
+        };
+      }
       return {
         ...prev,
-        included_facilities: current.filter((n) => n !== facName),
+        included_facilities: current.filter((inc) => {
+          const incName =
+            typeof inc === "object" && inc !== null ? inc.name : inc;
+          return incName !== facName;
+        }),
       };
     });
   };
@@ -122,7 +145,10 @@ export default function FacilityFormModal({
         data.append("existingImages", JSON.stringify(imagePreviews));
       }
 
-      const payloadPricingDetails = {};
+      const payloadPricingDetails = {
+        is_atomic: pricingDetails.is_atomic ?? true,
+        isatomic: pricingDetails.is_atomic ?? true,
+      };
       if (
         formData.facilityType === "PACKAGE" ||
         formData.facilityType === "COMPLEX"
@@ -146,9 +172,7 @@ export default function FacilityFormModal({
           }));
         }
       }
-      if (Object.keys(payloadPricingDetails).length > 0) {
-        data.append("pricingDetails", JSON.stringify(payloadPricingDetails));
-      }
+      data.append("pricingDetails", JSON.stringify(payloadPricingDetails));
 
       if (facility?.id) {
         await api.patch(`/facilities/${facility.id}`, data);
@@ -351,6 +375,36 @@ export default function FacilityFormModal({
             </select>
           </div>
 
+          {formData.facilityType !== "PACKAGE" &&
+            formData.facilityType !== "COMPLEX" && (
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={pricingDetails.is_atomic ?? true}
+                    onChange={(e) =>
+                      setPricingDetails({
+                        ...pricingDetails,
+                        is_atomic: e.target.checked,
+                      })
+                    }
+                    className="w-4 h-4 text-blue-600 focus:ring-blue-500 rounded cursor-pointer shrink-0"
+                    aria-label="Available for Custom/Individual Booking"
+                  />
+                  <div>
+                    <span className="block text-sm font-bold text-blue-900">
+                      Available for Custom/Individual Booking
+                    </span>
+                    <span className="block text-xs text-blue-700 mt-0.5">
+                      If unchecked, this facility (like a Green Room) is
+                      reserved and can only be booked as an inclusion inside a
+                      Package or Complex.
+                    </span>
+                  </div>
+                </label>
+              </div>
+            )}
+
           {(formData.facilityType === "PACKAGE" ||
             formData.facilityType === "COMPLEX") && (
             <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
@@ -374,7 +428,13 @@ export default function FacilityFormModal({
                   )
                   .map((fac) => {
                     const isChecked =
-                      pricingDetails.included_facilities?.includes(fac.name);
+                      pricingDetails.included_facilities?.some((inc) => {
+                        const incName =
+                          typeof inc === "object" && inc !== null
+                            ? inc.name
+                            : inc;
+                        return incName === fac.name;
+                      }) || false;
                     return (
                       <label
                         key={fac.id}
@@ -414,6 +474,7 @@ export default function FacilityFormModal({
                     })
                   }
                   className="text-sm border p-1 rounded"
+                  aria-label="Slot Type Configuration"
                 >
                   <option value="FIXED">
                     Fixed Shifts (e.g., Morning/Evening)
@@ -462,6 +523,7 @@ export default function FacilityFormModal({
                           updateSlot(slot.id, "label", e.target.value)
                         }
                         className="w-1/3 border p-1 text-sm rounded"
+                        aria-label={`Label for slot starting at ${slot.startTime}`}
                       />
                       <input
                         type="time"
@@ -471,6 +533,7 @@ export default function FacilityFormModal({
                           updateSlot(slot.id, "startTime", e.target.value)
                         }
                         className="border p-1 text-sm rounded"
+                        aria-label={`Start time for slot ${slot.label || "new slot"}`}
                       />
                       <span className="text-gray-400">to</span>
                       <input
@@ -481,6 +544,7 @@ export default function FacilityFormModal({
                           updateSlot(slot.id, "endTime", e.target.value)
                         }
                         className="border p-1 text-sm rounded"
+                        aria-label={`End time for slot ${slot.label || "new slot"}`}
                       />
                       <input
                         type="number"
@@ -490,11 +554,13 @@ export default function FacilityFormModal({
                           updateSlot(slot.id, "price", e.target.value)
                         }
                         className="w-1/4 border p-1 text-sm rounded font-bold text-green-700"
+                        aria-label={`Price for slot ${slot.label || "new slot"}`}
                       />
                       <button
                         type="button"
                         onClick={() => removeSlot(slot.id)}
                         className="text-red-500 hover:text-red-700 p-1 bg-red-50 rounded"
+                        aria-label={`Remove slot ${slot.label || "new slot"}`}
                       >
                         <X size={16} />
                       </button>
@@ -595,6 +661,8 @@ FacilityFormModal.propTypes = {
     isActive: PropTypes.bool,
     images: PropTypes.arrayOf(PropTypes.string),
     pricingDetails: PropTypes.shape({
+      is_atomic: PropTypes.bool,
+      isatomic: PropTypes.bool,
       slotType: PropTypes.string,
       durationHours: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
       slots: PropTypes.arrayOf(
@@ -606,7 +674,15 @@ FacilityFormModal.propTypes = {
           price: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
         }),
       ),
-      included_facilities: PropTypes.arrayOf(PropTypes.string),
+      included_facilities: PropTypes.oneOfType([
+        PropTypes.arrayOf(PropTypes.string),
+        PropTypes.arrayOf(
+          PropTypes.shape({
+            name: PropTypes.string,
+            quantity: PropTypes.number,
+          }),
+        ),
+      ]),
     }),
   }),
   allFacilities: PropTypes.arrayOf(

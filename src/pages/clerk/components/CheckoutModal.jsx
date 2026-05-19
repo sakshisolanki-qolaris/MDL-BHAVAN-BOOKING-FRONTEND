@@ -665,6 +665,7 @@ export default function CheckoutModal({ booking, onClose, onSuccess }) {
                           <input
                             type="radio"
                             value="ONLINE"
+                            required
                             checked={formData.settlementMode === "ONLINE"}
                             onChange={(e) =>
                               setFormData({
@@ -690,6 +691,7 @@ export default function CheckoutModal({ booking, onClose, onSuccess }) {
                         <input
                           type="radio"
                           value="CASH"
+                          required
                           checked={formData.settlementMode === "CASH"}
                           onChange={(e) =>
                             setFormData({
@@ -714,6 +716,7 @@ export default function CheckoutModal({ booking, onClose, onSuccess }) {
                         <input
                           type="radio"
                           value="QR"
+                          required
                           checked={formData.settlementMode === "QR"}
                           onChange={(e) =>
                             setFormData({

@@ -12,8 +12,13 @@ export default function UserLogin() {
   const [formData, setFormData] = useState({ mobile: "", password: "" });
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleChange = (e) =>
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    let { name, value } = e.target;
+    if (name === "mobile") {
+      value = value.replaceAll(/\D/g, "").slice(0, 10);
+    }
+    setFormData({ ...formData, [name]: value });
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -81,6 +86,8 @@ export default function UserLogin() {
                 name="mobile"
                 required
                 pattern="[0-9]{10}"
+                maxLength={10}
+                value={formData.mobile}
                 onChange={handleChange}
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all outline-none"
                 placeholder="Enter 10-digit mobile"

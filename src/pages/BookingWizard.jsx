@@ -221,14 +221,37 @@ export default function BookingWizard() {
             baseRate: 0,
             pricingType: "MIXED",
           });
-          const customOptions = facilities.filter(
-            (f) => f.facilityType !== "PACKAGE" && f.facilityType !== "COMPLEX",
-          );
+          const customOptions = facilities.filter((f) => {
+            if (f.facilityType === "PACKAGE" || f.facilityType === "COMPLEX") {
+              return false;
+            }
+            let details = f.pricingDetails;
+            if (typeof details === "string") {
+              try {
+                details = JSON.parse(details);
+              } catch (e) {
+                console.error("Failed to parse pricingDetails:", e);
+              }
+            }
+            const isExplicitlyNonAtomic = details && (details.is_atomic === false || details.isatomic === false);
+            return !isExplicitlyNonAtomic;
+          });
           setExtraItems(
-            customOptions.map((item) => ({
-              ...item,
-              isAvailableForDates: true,
-            })),
+            customOptions.map((item) => {
+              let parsedDetails = item.pricingDetails;
+              if (typeof parsedDetails === "string") {
+                try {
+                  parsedDetails = JSON.parse(parsedDetails);
+                } catch (e) {
+                  console.error("Failed to parse pricingDetails:", e);
+                }
+              }
+              return {
+                ...item,
+                pricingDetails: parsedDetails,
+                isAvailableForDates: true,
+              };
+            }),
           );
         } else {
           const found = facilities.find((f) => f.id === facilityId);

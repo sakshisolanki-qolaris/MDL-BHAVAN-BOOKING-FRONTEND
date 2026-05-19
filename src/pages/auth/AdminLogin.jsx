@@ -65,9 +65,12 @@ export default function AdminLogin() {
                   id="adminMobile"
                   type="text"
                   required
-                  onChange={(e) =>
-                    setFormData({ ...formData, mobile: e.target.value })
-                  }
+                  value={formData.mobile}
+                  onChange={(e) => {
+                    const cleanValue = e.target.value.replaceAll(/\D/g, "").slice(0, 10);
+                    setFormData({ ...formData, mobile: cleanValue });
+                  }}
+                  maxLength={10}
                   className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-red-500 outline-none transition font-medium"
                 />
               </div>

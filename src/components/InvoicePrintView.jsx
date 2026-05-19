@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import PropTypes from "prop-types";
 import { Printer, X } from "lucide-react";
 
@@ -88,6 +88,23 @@ const getAmountInWords = (amount) => {
 };
 
 export default function InvoicePrintView({ invoice, booking, onClose }) {
+  // NEW: State to hold the Base64 signature
+const [signatureDataUrl, setSignatureDataUrl] = useState(null);
+
+  // NEW: Fetch the image and convert to Base64 to bypass Canvas security
+  useEffect(() => {
+    if (invoice?.adminSignatureUrl) {
+      fetch(invoice.adminSignatureUrl)
+        .then((res) => res.blob())
+        .then((blob) => {
+          const reader = new FileReader();
+          reader.onloadend = () => setSignatureDataUrl(reader.result);
+          reader.readAsDataURL(blob);
+        })
+        .catch((err) => console.error("Signature block by CORS:", err));
+    }
+  }, [invoice?.adminSignatureUrl]);
+
   if (!invoice || !booking) return null;
 
   // FIX: Removed the unused standalone variable declaration. Replaced its hardcoded usage down below.
@@ -183,7 +200,7 @@ export default function InvoicePrintView({ invoice, booking, onClose }) {
               : "Tax Invoice"}
           </div>
 
-          <div className="border border-black flex flex-col">
+          <div className="border-2 border-black flex flex-col">
             <div className="flex border-b border-black">
               <div className="w-1/2 border-r border-black p-2">
                 <h2 className="font-extrabold text-sm mb-1">
@@ -653,7 +670,9 @@ export default function InvoicePrintView({ invoice, booking, onClose }) {
                   <p className="font-bold text-[11px] absolute top-2 right-2">
                     for MAHARASHTRA MANDAL, RAIPUR
                   </p>
-                  {invoice.adminSignatureUrl ? (
+                  
+                  {/* NEW: Use the Base64 data if available, fallback to URL */}
+                 {invoice.adminSignatureUrl ? (
                     <img
                       src={invoice.adminSignatureUrl}
                       alt="Admin Signature"
@@ -664,6 +683,7 @@ export default function InvoicePrintView({ invoice, booking, onClose }) {
                       Authorised Signatory
                     </p>
                   )}
+                  
                   <p className="font-semibold text-[10px] absolute bottom-2 right-2">
                     Authorised Signatory
                   </p>
