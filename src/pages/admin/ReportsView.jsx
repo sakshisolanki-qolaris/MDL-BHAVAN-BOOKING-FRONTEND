@@ -56,6 +56,7 @@ export default function ReportsView() {
 
   useEffect(() => {
     loadData(firstDay, currentDay);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const renderContent = () => {

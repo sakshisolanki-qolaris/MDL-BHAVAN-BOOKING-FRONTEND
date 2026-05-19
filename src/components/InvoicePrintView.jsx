@@ -674,7 +674,7 @@ const [signatureDataUrl, setSignatureDataUrl] = useState(null);
                   {/* NEW: Use the Base64 data if available, fallback to URL */}
                  {invoice.adminSignatureUrl ? (
                     <img
-                      src={invoice.adminSignatureUrl}
+                      src={signatureDataUrl || invoice.adminSignatureUrl}
                       alt="Admin Signature"
                       className="absolute bottom-6 right-2 h-12 object-contain"
                     />

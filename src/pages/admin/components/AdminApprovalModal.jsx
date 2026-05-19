@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import PropTypes from "prop-types";
 import { X } from "lucide-react";
 import { toast } from "react-toastify";
@@ -9,24 +9,22 @@ export default function AdminApprovalModal({
   onApprove,
   isSubmitting,
 }) {
-  const [totalAmount, setTotalAmount] = useState("");
-  const [overrideSecurityDeposit, setOverrideSecurityDeposit] = useState("");
-  const [isHoldingAllowed, setIsHoldingAllowed] = useState(false);
-  const [holdingPercentage, setHoldingPercentage] = useState(20);
-  const [holdingValidityDays, setHoldingValidityDays] = useState(7);
-
-  useEffect(() => {
-    if (booking) {
-      const financials = booking.financials || {};
-      setTotalAmount((Number(financials.calculatedAmount) || 0).toString());
-      setOverrideSecurityDeposit(
-        (Number(financials.securityDeposit) || 0).toString(),
-      );
-      setIsHoldingAllowed(financials.isHoldingAllowed || false);
-      setHoldingPercentage(financials.holdingPercentage || 20);
-      setHoldingValidityDays(financials.holdingValidityDays || 7);
-    }
-  }, [booking]);
+  const financials = booking?.financials || {};
+  const [totalAmount, setTotalAmount] = useState(() =>
+    (Number(financials.calculatedAmount) || 0).toString(),
+  );
+  const [overrideSecurityDeposit, setOverrideSecurityDeposit] = useState(() =>
+    (Number(financials.securityDeposit) || 0).toString(),
+  );
+  const [isHoldingAllowed, setIsHoldingAllowed] = useState(
+    () => financials.isHoldingAllowed || false,
+  );
+  const [holdingPercentage, setHoldingPercentage] = useState(
+    () => financials.holdingPercentage || 20,
+  );
+  const [holdingValidityDays, setHoldingValidityDays] = useState(
+    () => financials.holdingValidityDays || 7,
+  );
 
   const handleSubmit = (e) => {
     e.preventDefault();

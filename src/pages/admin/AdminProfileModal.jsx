@@ -29,7 +29,6 @@ export default function AdminProfileModal({ isOpen, onClose }) {
       setSignatureFile(null);
       setPreviewUrl(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   useEffect(() => {

@@ -450,6 +450,7 @@ export default function AdminDashboard() {
 
       {/* EXTRACTED MODALS IN ACTION */}
       <AdminApprovalModal
+        key={approvingBooking?.id || "none"}
         booking={approvingBooking}
         onClose={() => setApprovingBooking(null)}
         onApprove={handleConfirmApproval}

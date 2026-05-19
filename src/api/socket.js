@@ -1,8 +1,9 @@
 import { io } from 'socket.io-client';
 
-// Ensure this matches your backend URL. 
-// If your backend is hosted elsewhere, change this URL in your environment variables.
-const SOCKET_URL = import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:3000';
+const SOCKET_URL =
+  import.meta.env.VITE_API_URL?.replace("/api/v1", "") ||
+  import.meta.env.VITE_API_BASE_URL?.replace("/api/v1", "") ||
+  "http://localhost:3000";
 
 const socket = io(SOCKET_URL, {
   // CRITICAL: Required to send the HTTP-only JWT cookie to authenticate the websocket
