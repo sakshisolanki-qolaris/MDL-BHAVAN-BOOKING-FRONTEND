@@ -218,9 +218,62 @@ export default function BookingWidget({
             name="guestCount"
             value={formData.guestCount}
             onChange={handleChange}
-            className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 bg-gray-50"
+            className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 bg-gray-50 text-gray-950 font-medium"
           />
         </div>
+
+        {/* === EVENT TYPE === */}
+        <div>
+          <label
+            htmlFor="eventTypeSelect"
+            className="block text-sm font-bold text-gray-700 mb-1 flex items-center gap-2"
+          >
+            <Calendar size={16} className="text-blue-600" /> Event Type
+          </label>
+          <select
+            id="eventTypeSelect"
+            name="eventType"
+            value={["Marriage", "Meeting", "Exhibition", "Conference", "Birthday Party", "Corporate Event"].includes(formData.eventType) ? formData.eventType : "Other"}
+            onChange={(e) => {
+              if (e.target.value === "Other") {
+                handleChange({ target: { name: "eventType", value: "" } });
+              } else {
+                handleChange(e);
+              }
+            }}
+            className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 bg-gray-50 font-medium text-gray-950"
+          >
+            <option value="Marriage">Marriage</option>
+            <option value="Meeting">Meeting / Seminar</option>
+            <option value="Exhibition">Exhibition / Expo</option>
+            <option value="Conference">Conference</option>
+            <option value="Birthday Party">Birthday Party</option>
+            <option value="Corporate Event">Corporate Event</option>
+            <option value="Other">Other Purpose / Custom</option>
+          </select>
+        </div>
+
+        {/* CUSTOM EVENT TYPE TEXT INPUT (only shows if 'Other' is selected/entered) */}
+        {!["Marriage", "Meeting", "Exhibition", "Conference", "Birthday Party", "Corporate Event"].includes(formData.eventType) && (
+          <div className="animate-fade-in">
+            <label
+              htmlFor="customEventTypeInput"
+              className="block text-xs font-bold text-gray-600 mb-1"
+            >
+              Specify Custom Purpose <span className="text-red-500">*</span>
+            </label>
+            <input
+              id="customEventTypeInput"
+              type="text"
+              name="eventType"
+              required
+              value={formData.eventType}
+              onChange={handleChange}
+              placeholder="e.g. Devotional Function, Concert"
+              className="w-full border p-3 rounded-xl focus:ring-2 focus:ring-blue-500 bg-gray-50 font-medium text-gray-950"
+            />
+          </div>
+        )}
       </div>
 
       <div className="mt-8 space-y-3">
@@ -389,6 +442,7 @@ BookingWidget.propTypes = {
   setSelectedSlot: PropTypes.func.isRequired,
   formData: PropTypes.shape({
     guestCount: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+    eventType: PropTypes.string,
   }).isRequired,
   handleChange: PropTypes.func.isRequired,
   handleCheckAvailability: PropTypes.func.isRequired,

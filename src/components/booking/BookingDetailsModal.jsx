@@ -199,6 +199,18 @@ export default function BookingDetailsModal({ booking, onClose }) {
             </div>
           </div>
 
+          {/* Cancellation Remark */}
+          {["PENDING_CANCELLATION", "CANCELLED"].includes(booking.status) && (booking.cancellationReason || booking.cancellation?.cancellationReason) && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-5 shadow-sm">
+              <h3 className="text-sm font-bold text-red-800 uppercase tracking-wider mb-2 flex items-center gap-2">
+                <AlertCircle size={16} className="text-red-600" /> Cancellation Reason / Remark
+              </h3>
+              <p className="text-sm text-gray-700 italic bg-white p-3.5 rounded-lg border border-red-100 shadow-sm leading-relaxed">
+                &ldquo;{booking.cancellationReason || booking.cancellation?.cancellationReason}&rdquo;
+              </p>
+            </div>
+          )}
+
           {/* Middle Row: Schedule & KYC */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Schedule Card */}
@@ -350,6 +362,10 @@ BookingDetailsModal.propTypes = {
     id: PropTypes.oneOfType([PropTypes.string, PropTypes.number]).isRequired,
     status: PropTypes.string,
     eventType: PropTypes.string,
+    cancellationReason: PropTypes.string,
+    cancellation: PropTypes.shape({
+      cancellationReason: PropTypes.string,
+    }),
     guestCount: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
     user: PropTypes.shape({
       fullName: PropTypes.string,
